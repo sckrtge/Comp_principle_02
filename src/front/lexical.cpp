@@ -85,6 +85,9 @@ bool frontend::DFA::next(char input, Token& buf) {
             else if(std::isdigit(input)) {
                 return change_status(buf, State::IntLiteral, sinput);
             }
+            else if(input == '.') {
+                return change_status(buf, State::FloatLiteral, sinput);
+            }
             else if(std::isalpha(input)||input == '_') {
                 return change_status(buf, State::Ident,sinput);
             }
@@ -99,6 +102,9 @@ bool frontend::DFA::next(char input, Token& buf) {
             }
             else if(std::isdigit(input)) {
                 return change_status(buf, State::Ident, cur_str + sinput);
+            }
+            else if(input == '.') {
+                return change_status(buf, State::FloatLiteral, sinput, true, str2keyword(cur_str), cur_str);
             }
             else if(std::isalpha(input)||input == '_') {
                 return change_status(buf, State::Ident, cur_str + sinput);
@@ -150,6 +156,9 @@ bool frontend::DFA::next(char input, Token& buf) {
             }
             else if(std::isdigit(input)) {
                 return change_status(buf, State::IntLiteral, sinput, true, str2operator(cur_str), cur_str);
+            }
+            else if(input == '.') {
+                return change_status(buf, State::FloatLiteral, sinput, true, str2operator(cur_str), cur_str);
             }
             else if(std::isalpha(input)||input == '_') {
                 return change_status(buf, State::Ident, sinput, true, str2operator(cur_str), cur_str);

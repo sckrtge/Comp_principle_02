@@ -59,25 +59,24 @@ int main(int argc, char** argv) {
         output_file << writer.write(json_output);
         return 0;
     }
+    // frontend::Analyzer analyzer;
+    // auto program = analyzer.get_ir_program(node);
     
-    frontend::Analyzer analyzer;
-    auto program = analyzer.get_ir_program(node);
-    
-    // compiler <src_filename> -s2 -o <output_filename>
-    if(step == "-s2") {
-        output_file << program.draw();
-    }
+    // // compiler <src_filename> -s2 -o <output_filename>
+    // if(step == "-s2") {
+    //     output_file << program.draw();
+    // }
 
-    // compiler <src_filename> -e -o <output_filename>
-    if(step == "-e") {
-        auto output_file_name = des;
-        auto input_file_name = src.substr(0,src.size()-2) + "in";
-        ir::reopen_output_file =  fopen(output_file_name.c_str(), "w");
-        ir::reopen_input_file =  fopen(input_file_name.c_str(), "r");
+    // // compiler <src_filename> -e -o <output_filename>
+    // if(step == "-e") {
+    //     auto output_file_name = des;
+    //     auto input_file_name = src.substr(0,src.size()-2) + "in";
+    //     ir::reopen_output_file =  fopen(output_file_name.c_str(), "w");
+    //     ir::reopen_input_file =  fopen(input_file_name.c_str(), "r");
 
-        auto executor = ir::Executor(&program);
-        std::cout << program.draw() << "--------------------------- Executor::run() ---------------------------" << std::endl;
-        fprintf(ir::reopen_output_file, "\n%d", (uint8_t)executor.run());
-    }
+    //     auto executor = ir::Executor(&program);
+    //     std::cout << program.draw() << "--------------------------- Executor::run() ---------------------------" << std::endl;
+    //     fprintf(ir::reopen_output_file, "\n%d", (uint8_t)executor.run());
+    // }
     return 0;
 }
