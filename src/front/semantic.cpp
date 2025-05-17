@@ -30,26 +30,43 @@ map<std::string,ir::Function*>* frontend::get_lib_funcs() {
 }
 
 void frontend::SymbolTable::add_scope(Block* node) {
-    TODO;
+    ScopeInfo scope_node;
+    scope_node.cnt = ++scope_cnt;
+    scope_node.name = 'b';
+    scope_stack.push_back(scope_node);
 }
 void frontend::SymbolTable::exit_scope() {
-    TODO;
+    scope_stack.pop_back();
 }
 
 string frontend::SymbolTable::get_scoped_name(string id) const {
-    TODO;
+    auto scope_node = *scope_stack.rbegin();
+    return id + "_in_" + std::to_string(scope_node.cnt);
 }
 
 Operand frontend::SymbolTable::get_operand(string id) const {
-    TODO;
+    for(int i=scope_stack.size()-1;i>=0;--i) {
+        auto table = scope_stack[i].table;
+        if(table.find(id) != table.end()) {
+            return table[id].operand;
+        }
+    }
 }
 
 frontend::STE frontend::SymbolTable::get_ste(string id) const {
-    TODO;
+    for(int i=scope_stack.size()-1;i>=0;--i) {
+        auto table = scope_stack[i].table;
+        if(table.find(id) != table.end()) {
+            return table[id];
+        }
+    }
 }
 
 frontend::Analyzer::Analyzer(): tmp_cnt(0), symbol_table() {
-    TODO;
+    ScopeInfo global;
+    global.cnt = 0;
+    global.name = 'g';
+    symbol_table.scope_stack.push_back(global);
 }
 
 ir::Program frontend::Analyzer::get_ir_program(CompUnit* root) {

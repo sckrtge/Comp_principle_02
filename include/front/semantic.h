@@ -47,6 +47,7 @@ map<std::string,ir::Function*>* get_lib_funcs();
 struct SymbolTable{
     vector<ScopeInfo> scope_stack;
     map<std::string,ir::Function*> functions;
+    int scope_cnt;
 
     /**
      * @brief enter a new scope, record the infomation in scope stacks
@@ -107,6 +108,35 @@ struct Analyzer {
     // reject copy & assignment
     Analyzer(const Analyzer&) = delete;
     Analyzer& operator=(const Analyzer&) = delete;
+
+    void analysisCompUnit(CompUnit* , ir::Program&);
+    void analysisFuncDef(FuncDef*, ir::Function&);
+    void analysisDecl(Decl*, vector<ir::Instruction*>&);
+    void analysisConstDecl(ConstDecl*, vector<ir::Instruction*>&);
+    void analysisBType(BType*, vector<ir::Instruction*>&);
+    void analysisConstDef(ConstDef*, vector<ir::Instruction*>&);
+    void analysisConstInitVal(ConstInitVal*, vector<ir::Instruction*>&);
+    void analysisVarDecl(VarDecl*, vector<ir::Instruction*>&);
+    void analysisVarDef(VarDef*, vector<ir::Instruction*>&);
+    void analysisInitVal(InitVal*, vector<ir::Instruction*>&);
+    void analysisFuncFParam(FuncFParam*, ir::Function&);
+    void analysisFuncFParams(FuncFParams*, ir::Function&);
+    void analysisBlock(Block*, vector<ir::Instruction*>&);
+    void analysisBlockItem(BlockItem*, vector<ir::Instruction*>&);
+    void analysisStmt(Stmt* , vector<ir::Instruction*>&);
+    void analysisExp(Exp* , vector<ir::Instruction*>&);
+    void analysisCond(Cond* , vector<ir::Instruction*>&);
+    void analysisLVal(LVal* , vector<ir::Instruction*>&);
+    void analysisPrimaryExp(PrimaryExp* , vector<ir::Instruction*>&);
+    void analysisUnaryExp(UnaryExp* , vector<ir::Instruction*>&);
+    void analysisFuncRParams(FuncRParams* , vector<ir::Instruction*>&, ir::CallInst&);
+    void analysisMulExp(MulExp* , vector<ir::Instruction*>&);
+    void analysisAddExp(AddExp* , vector<ir::Instruction*>&);
+    void analysisRelExp(RelExp* , vector<ir::Instruction*>&);
+    void analysisEqExp(EqExp* , vector<ir::Instruction*>&);
+    void analysisLAndExp(LAndExp* , vector<ir::Instruction*>&);
+    void analysisLOrExp(LOrExp* , vector<ir::Instruction*>&);
+    void analysisConstExp(ConstExp* , vector<ir::Instruction*>&);
 };
 
 } // namespace frontend
