@@ -38,6 +38,8 @@ struct ScopeInfo {
     int cnt;
     string name;
     map_str_ste table;
+    ScopeInfo(int cnt, string name, map_str_ste table) : cnt(cnt),name(name), table(table) {}
+    ScopeInfo() {}
 };
 
 // surpport lib functions

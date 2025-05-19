@@ -1,22 +1,30 @@
-#include"front/semantic.h"
-#include<iostream>
-#include<cassert>
-using ir::Instruction;
+#include "front/semantic.h"
+#include <iostream>
+#include <cassert>
 using ir::Function;
+using ir::Instruction;
 using ir::Operand;
 using ir::Operator;
 
 #define TODO assert(0 && "TODO");
 
+#define GET_CHILD_PTR(node, type, index)                     \
+    auto node = dynamic_cast<type *>(root->children[index]); \
+    assert(node);
 
-#define GET_CHILD_PTR(node, type, index) auto node = dynamic_cast<type*>(root->children[index]); assert(node); 
+#define ANALYSIS(node, type, index)                          \
+    auto node = dynamic_cast<type *>(root->children[index]); \
+    assert(node);                                            \
+    analysis##type(node, buffer);
 
-#define ANALYSIS(node, type, index) auto node = dynamic_cast<type*>(root->children[index]); assert(node); analysis##type(node, buffer);
+#define COPY_EXP_NODE(from, to)              \
+    to->is_computable = from->is_computable; \
+    to->v = from->v;                         \
+    to->t = from->t;
 
-#define COPY_EXP_NODE(from, to) to->is_computable = from->is_computable; to->v = from->v; to->t = from->t;
-
-map<std::string, ir::Function*>* frontend::get_lib_funcs() {
-    static map<std::string, ir::Function*> lib_funcs = {
+map<std::string, ir::Function *> *frontend::get_lib_funcs()
+{
+    static map<std::string, ir::Function *> lib_funcs = {
         {"getint", new Function("getint", Type::Int)},
         {"getch", new Function("getch", Type::Int)},
         {"getfloat", new Function("getfloat", Type::Float)},
@@ -31,512 +39,664 @@ map<std::string, ir::Function*>* frontend::get_lib_funcs() {
     return &lib_funcs;
 }
 
-std::string trans2ten(std::string value){
-    if(value.size() >= 2){
-        if(value[0] == '0' && (value[1] == 'x' || value[1] == 'X')){
+std::string trans2ten(std::string value)
+{
+    if (value.size() >= 2)
+    {
+        if (value[0] == '0' && (value[1] == 'x' || value[1] == 'X'))
+        {
             return std::to_string(std::stoi(value, nullptr, 16));
-        }else if(value[0] == '0' && (value[1] == 'b' || value[1] == 'B')){
+        }
+        else if (value[0] == '0' && (value[1] == 'b' || value[1] == 'B'))
+        {
             value = value.substr(2);
             return std::to_string(std::stoi(value, nullptr, 2));
-        }else if(value[0] == '0'){
+        }
+        else if (value[0] == '0')
+        {
             return std::to_string(std::stoi(value, nullptr, 8));
         }
     }
     return std::to_string(std::stoi(value, nullptr, 10));
 }
 
-void frontend::Analyzer::type_transform(Operand& a, Operand& b, vector<Instruction*>& buffer){
-    if (a.type == Type::Int){
-        if (b.type == Type::Float){     
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+void frontend::Analyzer::type_transform(Operand &a, Operand &b, vector<Instruction *> &buffer)
+{
+    if (a.type == Type::Int)
+    {
+        if (b.type == Type::Float)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(a, {}, tmp_op, Operator::cvt_i2f));
-            a = tmp_op;   
-        }else if (b.type == Type::FloatLiteral){    
-            auto tmp_op1 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+            a = tmp_op;
+        }
+        else if (b.type == Type::FloatLiteral)
+        {
+            auto tmp_op1 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(a, {}, tmp_op1, Operator::cvt_i2f));
 
-            auto tmp_op2 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+            auto tmp_op2 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(b, {}, tmp_op2, Operator::fdef));
-            
+
             a = tmp_op1;
             b = tmp_op2;
-        }else if (b.type == Type::IntLiteral){      
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Int);    
+        }
+        else if (b.type == Type::IntLiteral)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
             buffer.push_back(new Instruction(b, {}, tmp_op, Operator::def));
 
             b = tmp_op;
         }
-    }else if (a.type == Type::IntLiteral){      
-        if (b.type == Type::Float){
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+    }
+    else if (a.type == Type::IntLiteral)
+    {
+        if (b.type == Type::Float)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(Operand(a.name, Type::FloatLiteral), {}, tmp_op, Operator::fdef));
+
             a = tmp_op;
-        }else if (b.type == Type::Int){     
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Int);    
+        }
+        else if (b.type == Type::Int)
+        {
+
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
             buffer.push_back(new Instruction(a, {}, tmp_op, Operator::def));
+
             a = tmp_op;
-        }else if (b.type == Type::IntLiteral){      
-            
-            auto tmp_op1 = Operand("t" + std::to_string(tmp_cnt++), Type::Int);    
+        }
+        else if (b.type == Type::IntLiteral)
+        {
+
+            auto tmp_op1 = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
             buffer.push_back(new Instruction(a, {}, tmp_op1, Operator::def));
 
-            auto tmp_op2 = Operand("t" + std::to_string(tmp_cnt++), Type::Int);    
+            auto tmp_op2 = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
             buffer.push_back(new Instruction(b, {}, tmp_op2, Operator::def));
 
             a = tmp_op1;
             b = tmp_op2;
         }
-    }else if(a.type == Type::Float){    
-        if (b.type == Type::Int){
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+    }
+    else if (a.type == Type::Float)
+    {
+        if (b.type == Type::Int)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(b, {}, tmp_op, Operator::cvt_i2f));
 
             b = tmp_op;
-        }else if (b.type == Type::IntLiteral){  
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+        }
+        else if (b.type == Type::IntLiteral)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(Operand(b.name, Type::FloatLiteral), {}, tmp_op, Operator::fdef));
 
             b = tmp_op;
-        }else if (b.type == Type::FloatLiteral){  
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Int);    
+        }
+        else if (b.type == Type::FloatLiteral)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
             buffer.push_back(new Instruction(b, {}, tmp_op, Operator::fdef));
 
             b = tmp_op;
         }
-    }else if (a.type == Type::FloatLiteral){
-        if (b.type == Type::Int){
-            auto tmp_op1 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+    }
+    else if (a.type == Type::FloatLiteral)
+    {
+        if (b.type == Type::Int)
+        {
+            auto tmp_op1 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(Operand(a.name, Type::FloatLiteral), {}, tmp_op1, Operator::fdef));
 
-            auto tmp_op2 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+            auto tmp_op2 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(b, {}, tmp_op2, Operator::cvt_i2f));
+
             a = tmp_op1;
             b = tmp_op2;
-        }else if (b.type == Type::Float){
-            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);    
+        }
+        else if (b.type == Type::Float)
+        {
+            auto tmp_op = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
             buffer.push_back(new Instruction(Operand(a.name, Type::FloatLiteral), {}, tmp_op, Operator::fdef));
+
             a = tmp_op;
         }
     }
 }
 
-void frontend::SymbolTable::add_scope(Block* node) {
+void frontend::SymbolTable::add_scope(Block *node)
+{
 
-    ScopeInfo scope_info;   
-    scope_info.cnt = ++scope_cnt;    
-    scope_stack.push_back(scope_info);  
-
+    ScopeInfo scope_info;
+    scope_info.cnt = ++scope_cnt;
+    scope_stack.push_back(scope_info);
 }
 
-void frontend::SymbolTable::exit_scope() {
+void frontend::SymbolTable::exit_scope()
+{
     scope_stack.pop_back();
 }
 
-string frontend::SymbolTable::get_scoped_name(string id) const {
-    int cnt = scope_stack.back().cnt;  
+string frontend::SymbolTable::get_scoped_name(string id) const
+{
+    int cnt = scope_stack.back().cnt;
     return id + "_" + std::to_string(cnt);
 }
 
-Operand frontend::SymbolTable::get_operand(string id) const {
+Operand frontend::SymbolTable::get_operand(string id) const
+{
     map_str_ste temp;
-    for (int i=scope_stack.size()-1; i>=0; i--){      
-        temp = scope_stack[i].table;     
-        if(temp.find(id) != temp.end()){     
+    for (int i = scope_stack.size() - 1; i >= 0; i--)
+    {
+        temp = scope_stack[i].table;
+        if (temp.find(id) != temp.end())
+        {
             return temp[id].operand;
         }
     }
 }
 
-frontend::STE frontend::SymbolTable::get_ste(string id) const {
+frontend::STE frontend::SymbolTable::get_ste(string id) const
+{
     map_str_ste temp;
-    for (int i=scope_stack.size()-1; i>=0; i--){      
-        temp= scope_stack[i].table;     
-        if(temp.find(id) != temp.end()){     
+    for (int i = scope_stack.size() - 1; i >= 0; i--)
+    {
+        temp = scope_stack[i].table;
+        if (temp.find(id) != temp.end())
+        {
             return temp[id];
         }
     }
 }
 
-frontend::Analyzer::Analyzer(): tmp_cnt(0), symbol_table() {
-    symbol_table.scope_stack.push_back({0, "global", map_str_ste()});    
+frontend::Analyzer::Analyzer() : tmp_cnt(0), symbol_table()
+{
+    symbol_table.scope_stack.push_back({0, "global", map_str_ste()});
 }
 
-ir::Program frontend::Analyzer::get_ir_program(CompUnit* root) {
-    ir::Program buffer = ir::Program();    
-    Function* global_func = new Function("global", Type::null);
-    symbol_table.functions.insert({"global", global_func});  
-    buffer.addFunction(*global_func);   
+ir::Program frontend::Analyzer::get_ir_program(CompUnit *root)
+{
+    ir::Program buffer = ir::Program();
+    Function *global_func = new Function("global", Type::null);
+
+    symbol_table.functions.insert({"global", global_func});
+    buffer.addFunction(*global_func);
     auto lib_funcs = *get_lib_funcs();
     for (auto it = lib_funcs.begin(); it != lib_funcs.end(); it++)
         symbol_table.functions[it->first] = it->second;
+
     analysisCompUnit(root, buffer);
+
     buffer.functions[0].addInst(new ir::Instruction({Operand("null", Type::null), Operand(), Operand(), Operator::_return}));
-    
-    std::cout<<buffer.draw();     
+
+    std::cout << buffer.draw();
     return buffer;
 }
 
-void frontend::Analyzer::analysisCompUnit(CompUnit* root, ir::Program& buffer){
-    if (root->children[0]->type == NodeType::DECL){     
-        GET_CHILD_PTR(decl, Decl, 0);   
+void frontend::Analyzer::analysisCompUnit(CompUnit *root, ir::Program &buffer)
+{
+
+    if (root->children[0]->type == NodeType::DECL)
+    {
+        GET_CHILD_PTR(decl, Decl, 0);
         assert(decl);
-        analysisDecl(decl, buffer.functions.back().InstVec);    
-        
-    }else if (root->children[0]->type == NodeType::FUNCDEF){    
-        
-        if (buffer.functions.size() == 1){     
+        analysisDecl(decl, buffer.functions.back().InstVec);
+    }
+    else if (root->children[0]->type == NodeType::FUNCDEF)
+    {
+
+        if (buffer.functions.size() == 1)
+        {
 
             auto global_ir = buffer.functions[0].InstVec;
-            for (int i=0; i<(int)global_ir.size(); i++){   
-                buffer.globalVal.push_back(ir::GlobalVal(global_ir[i]->des));  
+            for (int i = 0; i < (int)global_ir.size(); i++)
+            {
+                buffer.globalVal.push_back(ir::GlobalVal(global_ir[i]->des));
             }
         }
 
-        GET_CHILD_PTR(funcdef, FuncDef, 0);     
+        GET_CHILD_PTR(funcdef, FuncDef, 0);
         assert(funcdef);
-        auto tmp = ir::Function();  
+        auto tmp = ir::Function();
         analysisFuncDef(funcdef, tmp);
-        buffer.addFunction(tmp);    
+        buffer.addFunction(tmp);
     }
 
-    if ((int)(int)root->children.size() == 2){
+    if ((int)(int)root->children.size() == 2)
+    {
         ANALYSIS(compunit, CompUnit, 1);
     }
 }
 
-void frontend::Analyzer::analysisFuncDef(FuncDef* root, ir::Function& function){
-    auto tk = dynamic_cast<Term*>(root->children[0]->children[0])->token.type;  
-    root->t = tk == TokenType::VOIDTK ? Type::null : tk == TokenType::INTTK ? Type::Int :Type::Float;
-    root->n = dynamic_cast<Term*>(root->children[1])->token.value;
-    function.name = root->n;       
-    function.returnType = root->t; 
+void frontend::Analyzer::analysisFuncDef(FuncDef *root, ir::Function &function)
+{
+
+    auto tk = dynamic_cast<Term *>(root->children[0]->children[0])->token.type;
+    root->t = tk == TokenType::VOIDTK ? Type::null : tk == TokenType::INTTK ? Type::Int
+                                                                            : Type::Float;
+    root->n = dynamic_cast<Term *>(root->children[1])->token.value;
+    function.name = root->n;
+    function.returnType = root->t;
+
     int cnt = ++symbol_table.scope_cnt;
-    symbol_table.scope_stack.push_back({cnt, "fp", map_str_ste()});   
-    symbol_table.functions.insert({root->n, &function});            
-    curr_function = &function;  
-    if (function.name == "main"){   
+    symbol_table.scope_stack.push_back({cnt, "fp", map_str_ste()});
+    symbol_table.functions.insert({root->n, &function});
+    curr_function = &function;
+
+    if (function.name == "main")
+    {
         auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::null);
-        auto global_callinst = new ir::CallInst(Operand("global", Type::null), vector<Operand>(), tmp);  
+        auto global_callinst = new ir::CallInst(Operand("global", Type::null), vector<Operand>(), tmp);
         curr_function->addInst(global_callinst);
     }
 
-    auto paras = dynamic_cast<FuncFParams*>(root->children[3]);     
-    if (paras){     
+    auto paras = dynamic_cast<FuncFParams *>(root->children[3]);
+    if (paras)
+    {
         analysisFuncFParams(paras, function);
-        analysisBlock(dynamic_cast<Block*>(root->children[5]), function.InstVec);
-    }else{
-        analysisBlock(dynamic_cast<Block*>(root->children[4]), function.InstVec);
+        analysisBlock(dynamic_cast<Block *>(root->children[5]), function.InstVec);
+    }
+    else
+    {
+        analysisBlock(dynamic_cast<Block *>(root->children[4]), function.InstVec);
     }
 
-    if (function.returnType == Type::null){     
+    if (function.returnType == Type::null)
+    {
         auto return_inst = new Instruction({Operand("null", Type::null), {}, {}, Operator::_return});
         curr_function->addInst(return_inst);
     }
 
-    symbol_table.exit_scope();  
+    symbol_table.exit_scope();
 }
 
-void frontend::Analyzer::analysisDecl(Decl* root, vector<ir::Instruction*>& buffer){
+void frontend::Analyzer::analysisDecl(Decl *root, vector<ir::Instruction *> &buffer)
+{
 
-    if (root->children[0]->type == NodeType::CONSTDECL){    
+    if (root->children[0]->type == NodeType::CONSTDECL)
+    {
         ANALYSIS(constdecl, ConstDecl, 0);
-    }else if (root->children[0]->type == NodeType::VARDECL){    
+    }
+    else if (root->children[0]->type == NodeType::VARDECL)
+    {
         ANALYSIS(vardecl, VarDecl, 0);
     }
 }
 
-void frontend::Analyzer::analysisConstDecl(ConstDecl* root, vector<ir::Instruction*>& buffer){
+void frontend::Analyzer::analysisConstDecl(ConstDecl *root, vector<ir::Instruction *> &buffer)
+{
     ANALYSIS(btype, BType, 1);
-    root->t = btype->t;   
-    ANALYSIS(constdef1, ConstDef, 2);    
+    root->t = btype->t;
+    ANALYSIS(constdef1, ConstDef, 2);
     int i = 3;
-    while (dynamic_cast<Term*>(root->children[i])->token.type == TokenType::COMMA){
-        ANALYSIS(constdef2, ConstDef, i+1);  
+    while (dynamic_cast<Term *>(root->children[i])->token.type == TokenType::COMMA)
+    {
+        ANALYSIS(constdef2, ConstDef, i + 1);
         i += 2;
     }
 }
 
-void frontend::Analyzer::analysisBType(BType* root, vector<ir::Instruction*>& buffer){
-    auto tk = dynamic_cast<Term*>(root->children[0])->token.type;  
-    root->t = tk==TokenType::INTTK ? Type::Int : Type::Float;  
+void frontend::Analyzer::analysisBType(BType *root, vector<ir::Instruction *> &buffer)
+{
+    auto tk = dynamic_cast<Term *>(root->children[0])->token.type;
+    root->t = tk == TokenType::INTTK ? Type::Int : Type::Float;
 }
 
-void frontend::Analyzer::analysisConstDef(ConstDef* root, vector<ir::Instruction*>& buffer){
-    auto root_type = dynamic_cast<ConstDecl*>(root->parent)->t;   
+void frontend::Analyzer::analysisConstDef(ConstDef *root, vector<ir::Instruction *> &buffer)
+{
+    auto root_type = dynamic_cast<ConstDecl *>(root->parent)->t;
     GET_CHILD_PTR(identifier, Term, 0);
-    string id = identifier->token.value;    
-    string new_name = symbol_table.get_scoped_name(id);     
-    root->arr_name = new_name;  
+    string id = identifier->token.value;
+    string new_name = symbol_table.get_scoped_name(id);
+    root->arr_name = new_name;
 
-    GET_CHILD_PTR(term, Term, 1);   
-    if (term->token.type == TokenType::ASSIGN){   
-        ANALYSIS(constinitval, ConstInitVal, 2);    
-        Operand des = Operand(new_name, root_type);     
+    GET_CHILD_PTR(term, Term, 1);
+    if (term->token.type == TokenType::ASSIGN)
+    {
+        ANALYSIS(constinitval, ConstInitVal, 2);
+        Operand des = Operand(new_name, root_type);
         auto opcode = (root_type == Type::Float || root_type == Type::FloatLiteral) ? Operator::fdef : Operator::def;
-        Operand op1 = Operand(constinitval->v, constinitval->t);    
-        if (root_type == Type::Float){  
-            if (constinitval->t == Type::Int){  
+        Operand op1 = Operand(constinitval->v, constinitval->t);
+        if (root_type == Type::Float)
+        {
+            if (constinitval->t == Type::Int)
+            {
                 auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
                 buffer.push_back(new Instruction(op1, {}, tmp, Operator::cvt_i2f));
-                op1 = tmp;  
-            }else if (constinitval->t == Type::IntLiteral){     
+                op1 = tmp;
+            }
+            else if (constinitval->t == Type::IntLiteral)
+            {
                 op1.type = Type::FloatLiteral;
             }
-        }else{  
+        }
+        else
+        {
             assert(root_type == Type::Int);
-            if (constinitval->t == Type::Float){    
+            if (constinitval->t == Type::Float)
+            {
                 auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
                 buffer.push_back(new Instruction(op1, {}, tmp, Operator::cvt_f2i));
                 op1 = tmp;
-            }else if(constinitval->t == Type::FloatLiteral){    
-                op1.name = std::to_string((int)std::stof(op1.name));  
+            }
+            else if (constinitval->t == Type::FloatLiteral)
+            {
+                op1.name = std::to_string((int)std::stof(op1.name));
                 op1.type = Type::IntLiteral;
             }
         }
-        buffer.push_back(new Instruction(op1, Operand(), des, opcode));     
-        symbol_table.scope_stack.back().table.insert({id, {op1, {}}});      
-
-    }else if ((int)root->children.size() == 6){   
-        ANALYSIS(constexp, ConstExp, 2);    
-        int array_size = std::stoi(constexp->v);    
-        STE arr_ste;    
-        arr_ste.dimension.push_back(array_size);  
+        buffer.push_back(new Instruction(op1, Operand(), des, opcode));
+        symbol_table.scope_stack.back().table.insert({id, {op1, {}}});
+    }
+    else if ((int)root->children.size() == 6)
+    {
+        ANALYSIS(constexp, ConstExp, 2);
+        int array_size = std::stoi(constexp->v);
+        STE arr_ste;
+        arr_ste.dimension.push_back(array_size);
         ir::Type curr_type = root_type;
-        if (curr_type == ir::Type::Int){
+        if (curr_type == ir::Type::Int)
+        {
             curr_type = ir::Type::IntPtr;
-        }else if (curr_type == ir::Type::Float){
+        }
+        else if (curr_type == ir::Type::Float)
+        {
             curr_type = ir::Type::FloatPtr;
         }
         arr_ste.operand = ir::Operand(new_name, curr_type);
-        symbol_table.scope_stack.back().table[id] = arr_ste;    
-        buffer.push_back(new Instruction({Operand(std::to_string(array_size),ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
+        symbol_table.scope_stack.back().table[id] = arr_ste;
+        buffer.push_back(new Instruction({Operand(std::to_string(array_size), ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
 
-        
         GET_CHILD_PTR(constinitval, ConstInitVal, 5);
-        if (constinitval->children.size() == 2){    
-            for (int i = 0; i<array_size; i++){
+        if (constinitval->children.size() == 2)
+        {
+            for (int i = 0; i < array_size; i++)
+            {
                 buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(i), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
             }
-        }else{
-            int cnt = 0;    
-            for (int i = 1; i< (int)constinitval->children.size()-1; i+=2, cnt++){     
-                ConstInitVal* child = dynamic_cast<ConstInitVal*>(constinitval->children[i]);
-                ConstExp* constexp = dynamic_cast<ConstExp*>(child->children[0]);
-                analysisConstExp(constexp, buffer); 
+        }
+        else
+        {
+            int cnt = 0;
+            for (int i = 1; i < (int)constinitval->children.size() - 1; i += 2, cnt++)
+            {
+                ConstInitVal *child = dynamic_cast<ConstInitVal *>(constinitval->children[i]);
+                ConstExp *constexp = dynamic_cast<ConstExp *>(child->children[0]);
+                analysisConstExp(constexp, buffer);
                 buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(cnt), Type::IntLiteral), Operand(constexp->v, Type::IntLiteral), Operator::store}));
             }
         }
-    
-    }else if ((int)root->children.size() == 9){  
-        ANALYSIS(constexp1, ConstExp, 2);    
-        ANALYSIS(constexp2, ConstExp, 5);    
-        int array_size = std::stoi(constexp1->v) * std::stoi(constexp2->v);    
-        STE arr_ste;    
-        arr_ste.dimension.push_back(std::stoi(constexp1->v));   
-        arr_ste.dimension.push_back(std::stoi(constexp2->v));   
+    }
+    else if ((int)root->children.size() == 9)
+    {
+        ANALYSIS(constexp1, ConstExp, 2);
+        ANALYSIS(constexp2, ConstExp, 5);
+        int array_size = std::stoi(constexp1->v) * std::stoi(constexp2->v);
+        STE arr_ste;
+        arr_ste.dimension.push_back(std::stoi(constexp1->v));
+        arr_ste.dimension.push_back(std::stoi(constexp2->v));
         ir::Type curr_type = root_type;
-        if (curr_type == ir::Type::Int){
+        if (curr_type == ir::Type::Int)
+        {
             curr_type = ir::Type::IntPtr;
-        }else if (curr_type == ir::Type::Float){
+        }
+        else if (curr_type == ir::Type::Float)
+        {
             curr_type = ir::Type::FloatPtr;
         }
         arr_ste.operand = ir::Operand(new_name, curr_type);
-        symbol_table.scope_stack.back().table[id] = arr_ste;    
-        buffer.push_back(new Instruction({Operand(std::to_string(array_size),ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
-        
+        symbol_table.scope_stack.back().table[id] = arr_ste;
+        buffer.push_back(new Instruction({Operand(std::to_string(array_size), ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
+
         GET_CHILD_PTR(constinitval, ConstInitVal, 8);
-        if (constinitval->children.size() == 2){    
-            for (int i = 0; i<array_size; i++){
+        if (constinitval->children.size() == 2)
+        {
+            for (int i = 0; i < array_size; i++)
+            {
                 buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(i), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
             }
-        }else{
-            int cnt = 0;    
-            for (int i = 1; i< (int)constinitval->children.size()-1; i+=2, cnt++){     
-                ConstInitVal* child = dynamic_cast<ConstInitVal*>(constinitval->children[i]);
-                ConstExp* constexp = dynamic_cast<ConstExp*>(child->children[0]);
-                analysisConstExp(constexp, buffer); 
+        }
+        else
+        {
+            int cnt = 0;
+            for (int i = 1; i < (int)constinitval->children.size() - 1; i += 2, cnt++)
+            {
+                ConstInitVal *child = dynamic_cast<ConstInitVal *>(constinitval->children[i]);
+                ConstExp *constexp = dynamic_cast<ConstExp *>(child->children[0]);
+                analysisConstExp(constexp, buffer);
                 buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(cnt), Type::IntLiteral), Operand(constexp->v, Type::IntLiteral), Operator::store}));
             }
         }
     }
 }
 
-void frontend::Analyzer::analysisConstInitVal(ConstInitVal* root, vector<ir::Instruction*>& buffer){
-    if (root->children[0]->type == NodeType::CONSTEXP){     
-        ANALYSIS(constexp, ConstExp, 0);    
+void frontend::Analyzer::analysisConstInitVal(ConstInitVal *root, vector<ir::Instruction *> &buffer)
+{
+    if (root->children[0]->type == NodeType::CONSTEXP)
+    {
+        ANALYSIS(constexp, ConstExp, 0);
         root->v = constexp->v;
         root->t = constexp->t;
     }
 }
 
-void frontend::Analyzer::analysisVarDecl(VarDecl* root, vector<ir::Instruction*>& buffer){
+void frontend::Analyzer::analysisVarDecl(VarDecl *root, vector<ir::Instruction *> &buffer)
+{
 
-    ANALYSIS(btype, BType, 0);      
-    root->t = btype->t;             
-    ANALYSIS(vardef, VarDef, 1);    
-    int i = 2;  
-    while (i < (int)root->children.size()-1){
-        ANALYSIS(vardef, VarDef, i+1);  
+    ANALYSIS(btype, BType, 0);
+    root->t = btype->t;
+    ANALYSIS(vardef, VarDef, 1);
+    int i = 2;
+    while (i < (int)root->children.size() - 1)
+    {
+        ANALYSIS(vardef, VarDef, i + 1);
         i += 2;
     }
 }
 
-void frontend::Analyzer::analysisVarDef(VarDef* root, vector<ir::Instruction*>& buffer){
-
-    auto root_type = dynamic_cast<VarDecl*>(root->parent)->t;   
-
-
+void frontend::Analyzer::analysisVarDef(VarDef *root, vector<ir::Instruction *> &buffer)
+{
+    auto root_type = dynamic_cast<VarDecl *>(root->parent)->t;
     GET_CHILD_PTR(identifier, Term, 0);
-    string id = identifier->token.value;    
+    string id = identifier->token.value;
 
-
-    string new_name = symbol_table.get_scoped_name(id);     
-    if ((int)root->children.size() == 1){    
-        Operand des = Operand(new_name, root_type);     
+    string new_name = symbol_table.get_scoped_name(id);
+    if ((int)root->children.size() == 1)
+    {
+        Operand des = Operand(new_name, root_type);
         auto opcode = (root_type == Type::Float || root_type == Type::FloatLiteral) ? Operator::fdef : Operator::def;
-        if (root_type == Type::Float){  
+        if (root_type == Type::Float)
+        {
             buffer.push_back(new Instruction(Operand("0.0", Type::FloatLiteral), Operand(), des, opcode));
-        }else{  
+        }
+        else
+        {
             buffer.push_back(new Instruction(Operand("0", Type::IntLiteral), Operand(), des, opcode));
         }
-        
-        symbol_table.scope_stack.back().table.insert({id, {des, {}}});      
-    }else{
-        GET_CHILD_PTR(term, Term, 1);   
-        if (term->token.type == TokenType::ASSIGN){   
-            ANALYSIS(initval, InitVal, 2);    
-            Operand des = Operand(new_name, root_type);     
+
+        symbol_table.scope_stack.back().table.insert({id, {des, {}}});
+    }
+    else
+    {
+        GET_CHILD_PTR(term, Term, 1);
+        if (term->token.type == TokenType::ASSIGN)
+        {
+            ANALYSIS(initval, InitVal, 2);
+            Operand des = Operand(new_name, root_type);
             auto opcode = (root_type == Type::Float || root_type == Type::FloatLiteral) ? Operator::fdef : Operator::def;
-            Operand op1 = Operand(initval->v, initval->t);    
-            if (root_type == Type::Float){  
-                if (initval->t == Type::Int){  
+            Operand op1 = Operand(initval->v, initval->t);
+            if (root_type == Type::Float)
+            {
+                if (initval->t == Type::Int)
+                {
                     auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
                     buffer.push_back(new Instruction(op1, {}, tmp, Operator::cvt_i2f));
-                    op1 = tmp;  
-                }else if (initval->t == Type::IntLiteral){     
+                    op1 = tmp;
+                }
+                else if (initval->t == Type::IntLiteral)
+                {
                     op1.type = Type::FloatLiteral;
                 }
-            }else{  
+            }
+            else
+            {
                 assert(root_type == Type::Int);
-                if (initval->t == Type::Float){    
+                if (initval->t == Type::Float)
+                {
                     auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
                     buffer.push_back(new Instruction(op1, {}, tmp, Operator::cvt_f2i));
                     op1 = tmp;
-                }else if(initval->t == Type::FloatLiteral){    
-                    op1.name = std::to_string((int)std::stof(op1.name));  
+                }
+                else if (initval->t == Type::FloatLiteral)
+                {
+                    op1.name = std::to_string((int)std::stof(op1.name));
                     op1.type = Type::IntLiteral;
                 }
             }
-            buffer.push_back(new Instruction(op1, Operand(), des, opcode));     
-            symbol_table.scope_stack.back().table.insert({id, {des, {}}});      
-        
-        }else if(root->children.back()->type == NodeType::INITVAL){    
-            
-            if ((int)root->children.size() == 6){   
-                ANALYSIS(constexp, ConstExp, 2);    
-                int array_size = std::stoi(constexp->v);    
-                STE arr_ste;    
-                arr_ste.dimension.push_back(array_size);  
+            buffer.push_back(new Instruction(op1, Operand(), des, opcode));
+            symbol_table.scope_stack.back().table.insert({id, {des, {}}});
+        }
+        else if (root->children.back()->type == NodeType::INITVAL)
+        {
+
+            if ((int)root->children.size() == 6)
+            {
+                ANALYSIS(constexp, ConstExp, 2);
+                int array_size = std::stoi(constexp->v);
+                STE arr_ste;
+                arr_ste.dimension.push_back(array_size);
                 ir::Type curr_type = root_type;
-                if (curr_type == ir::Type::Int){
+                if (curr_type == ir::Type::Int)
+                {
                     curr_type = ir::Type::IntPtr;
-                }else if (curr_type == ir::Type::Float){
+                }
+                else if (curr_type == ir::Type::Float)
+                {
                     curr_type = ir::Type::FloatPtr;
                 }
                 arr_ste.operand = ir::Operand(new_name, curr_type);
-                symbol_table.scope_stack.back().table[id] = arr_ste;    
-                buffer.push_back(new Instruction({Operand(std::to_string(array_size),ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
+                symbol_table.scope_stack.back().table[id] = arr_ste;
+                buffer.push_back(new Instruction({Operand(std::to_string(array_size), ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
 
-                
                 GET_CHILD_PTR(initval, InitVal, 5);
-                if (initval->children.size() == 2){    
-                    for (int i = 0; i<array_size; i++){
+                if (initval->children.size() == 2)
+                {
+                    for (int i = 0; i < array_size; i++)
+                    {
                         buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(i), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
                     }
-                }else{
-                    int cnt = 0;    
-                    for (int i = 1; i< (int)initval->children.size()-1; i+=2, cnt++){     
-                        InitVal* child = dynamic_cast<InitVal*>(initval->children[i]);
-                        Exp* exp = dynamic_cast<Exp*>(child->children[0]);
-                        analysisExp(exp, buffer); 
+                }
+                else
+                {
+                    int cnt = 0;
+                    for (int i = 1; i < (int)initval->children.size() - 1; i += 2, cnt++)
+                    {
+                        InitVal *child = dynamic_cast<InitVal *>(initval->children[i]);
+                        Exp *exp = dynamic_cast<Exp *>(child->children[0]);
+                        analysisExp(exp, buffer);
                         buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(cnt), Type::IntLiteral), Operand(exp->v, Type::IntLiteral), Operator::store}));
                     }
-                    
-                    for (;cnt<array_size;cnt++){
+
+                    for (; cnt < array_size; cnt++)
+                    {
                         buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(cnt), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
                     }
                 }
-            
-            }else if ((int)root->children.size() == 9){  
-                ANALYSIS(constexp1, ConstExp, 2);    
-                ANALYSIS(constexp2, ConstExp, 5);    
-                int array_size = std::stoi(constexp1->v) * std::stoi(constexp2->v);    
-                STE arr_ste;    
-                arr_ste.dimension.push_back(std::stoi(constexp1->v));   
-                arr_ste.dimension.push_back(std::stoi(constexp2->v));   
+            }
+            else if ((int)root->children.size() == 9)
+            {
+                ANALYSIS(constexp1, ConstExp, 2);
+                ANALYSIS(constexp2, ConstExp, 5);
+                int array_size = std::stoi(constexp1->v) * std::stoi(constexp2->v);
+                STE arr_ste;
+                arr_ste.dimension.push_back(std::stoi(constexp1->v));
+                arr_ste.dimension.push_back(std::stoi(constexp2->v));
                 ir::Type curr_type = root_type;
-                if (curr_type == ir::Type::Int){
+                if (curr_type == ir::Type::Int)
+                {
                     curr_type = ir::Type::IntPtr;
-                }else if (curr_type == ir::Type::Float){
+                }
+                else if (curr_type == ir::Type::Float)
+                {
                     curr_type = ir::Type::FloatPtr;
                 }
                 arr_ste.operand = ir::Operand(new_name, curr_type);
-                symbol_table.scope_stack.back().table[id] = arr_ste;    
-                buffer.push_back(new Instruction({Operand(std::to_string(array_size),ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
-                
+                symbol_table.scope_stack.back().table[id] = arr_ste;
+                buffer.push_back(new Instruction({Operand(std::to_string(array_size), ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
+
                 GET_CHILD_PTR(initval, InitVal, 8);
-                if (initval->children.size() == 2){    
-                    for (int i = 0; i<array_size; i++){
+                if (initval->children.size() == 2)
+                {
+                    for (int i = 0; i < array_size; i++)
+                    {
                         buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(i), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
                     }
-                }else{
-                    int cnt = 0;    
-                    for (int i = 1; i< (int)initval->children.size()-1; i+=2, cnt++){     
-                        InitVal* child = dynamic_cast<InitVal*>(initval->children[i]);
-                        Exp* exp = dynamic_cast<Exp*>(child->children[0]);
-                        analysisExp(exp, buffer); 
+                }
+                else
+                {
+                    int cnt = 0;
+                    for (int i = 1; i < (int)initval->children.size() - 1; i += 2, cnt++)
+                    {
+                        InitVal *child = dynamic_cast<InitVal *>(initval->children[i]);
+                        Exp *exp = dynamic_cast<Exp *>(child->children[0]);
+                        analysisExp(exp, buffer);
                         buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(cnt), Type::IntLiteral), Operand(exp->v, Type::IntLiteral), Operator::store}));
                     }
                 }
             }
-        }else{  
-            if ((int)root->children.size() == 4){   
-                ANALYSIS(constexp, ConstExp, 2);    
-                int array_size = std::stoi(constexp->v);    
-                STE arr_ste;    
-                arr_ste.dimension.push_back(array_size);  
+        }
+        else
+        {
+
+            if ((int)root->children.size() == 4)
+            {
+                ANALYSIS(constexp, ConstExp, 2);
+                int array_size = std::stoi(constexp->v);
+                STE arr_ste;
+                arr_ste.dimension.push_back(array_size);
                 ir::Type curr_type = root_type;
-                if (curr_type == ir::Type::Int){
+                if (curr_type == ir::Type::Int)
+                {
                     curr_type = ir::Type::IntPtr;
-                }else if (curr_type == ir::Type::Float){
+                }
+                else if (curr_type == ir::Type::Float)
+                {
                     curr_type = ir::Type::FloatPtr;
                 }
                 arr_ste.operand = ir::Operand(new_name, curr_type);
-                symbol_table.scope_stack.back().table[id] = arr_ste;    
-                buffer.push_back(new Instruction({Operand(std::to_string(array_size),ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
-                for (int i = 0; i<array_size; i++){
+                symbol_table.scope_stack.back().table[id] = arr_ste;
+                buffer.push_back(new Instruction({Operand(std::to_string(array_size), ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
+
+                for (int i = 0; i < array_size; i++)
+                {
                     buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(i), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
                 }
-            
-            }else if ((int)root->children.size() == 7){
-                ANALYSIS(constexp1, ConstExp, 2);    
-                ANALYSIS(constexp2, ConstExp, 5);    
-                int array_size = std::stoi(constexp1->v) * std::stoi(constexp2->v);    
-                STE arr_ste;    
-                arr_ste.dimension.push_back(std::stoi(constexp1->v));   
-                arr_ste.dimension.push_back(std::stoi(constexp2->v));   
+            }
+            else if ((int)root->children.size() == 7)
+            {
+                ANALYSIS(constexp1, ConstExp, 2);
+                ANALYSIS(constexp2, ConstExp, 5);
+                int array_size = std::stoi(constexp1->v) * std::stoi(constexp2->v);
+                STE arr_ste;
+                arr_ste.dimension.push_back(std::stoi(constexp1->v));
+                arr_ste.dimension.push_back(std::stoi(constexp2->v));
                 ir::Type curr_type = root_type;
-                if (curr_type == ir::Type::Int){
+                if (curr_type == ir::Type::Int)
+                {
                     curr_type = ir::Type::IntPtr;
-                }else if (curr_type == ir::Type::Float){
+                }
+                else if (curr_type == ir::Type::Float)
+                {
                     curr_type = ir::Type::FloatPtr;
                 }
                 arr_ste.operand = ir::Operand(new_name, curr_type);
-                symbol_table.scope_stack.back().table[id] = arr_ste;    
-                buffer.push_back(new Instruction({Operand(std::to_string(array_size),ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
-                
-                
-                for (int i = 0; i<array_size; i++){
+                symbol_table.scope_stack.back().table[id] = arr_ste;
+                buffer.push_back(new Instruction({Operand(std::to_string(array_size), ir::Type::IntLiteral), {}, Operand(new_name, curr_type), Operator::alloc}));
+
+                for (int i = 0; i < array_size; i++)
+                {
                     buffer.push_back(new Instruction({Operand(new_name, Type::IntPtr), Operand(std::to_string(i), Type::IntLiteral), Operand("0", Type::IntLiteral), Operator::store}));
                 }
             }
@@ -544,272 +704,358 @@ void frontend::Analyzer::analysisVarDef(VarDef* root, vector<ir::Instruction*>& 
     }
 }
 
-void frontend::Analyzer::analysisInitVal(InitVal* root, vector<ir::Instruction*>& buffer){
+void frontend::Analyzer::analysisInitVal(InitVal *root, vector<ir::Instruction *> &buffer)
+{
 
-    if (root->children[0]->type == NodeType::EXP){  
+    if (root->children[0]->type == NodeType::EXP)
+    {
         ANALYSIS(exp, Exp, 0);
         root->v = exp->v;
         root->t = exp->t;
     }
 }
 
-void frontend::Analyzer::analysisFuncFParam(FuncFParam* root, ir::Function& buffer){
-    
-    auto btype = dynamic_cast<BType*>(root->children[0]);
+void frontend::Analyzer::analysisFuncFParam(FuncFParam *root, ir::Function &buffer)
+{
+
+    auto btype = dynamic_cast<BType *>(root->children[0]);
     assert(btype);
     analysisBType(btype, buffer.InstVec);
-    std::string name = dynamic_cast<Term*>(root->children[1])->token.value; 
-    if ((int)root->children.size() > 2){     
+    std::string name = dynamic_cast<Term *>(root->children[1])->token.value;
+    if ((int)root->children.size() > 2)
+    {
 
         auto type = (btype->t == Type::Int) ? Type::IntPtr : Type::FloatPtr;
-        buffer.ParameterList.push_back(Operand(name, type));   
+        buffer.ParameterList.push_back(Operand(name, type));
         symbol_table.scope_stack.back().table.insert({name, {Operand(name, type), {}}});
-
-    }else{      
-        buffer.ParameterList.push_back(Operand(name, btype->t));   
+    }
+    else
+    {
+        buffer.ParameterList.push_back(Operand(name, btype->t));
         symbol_table.scope_stack.back().table.insert({name, {Operand(name, btype->t), {}}});
     }
 }
 
-void frontend::Analyzer::analysisFuncFParams(FuncFParams* root, ir::Function& buffer){
+void frontend::Analyzer::analysisFuncFParams(FuncFParams *root, ir::Function &buffer)
+{
 
-    if ((int)root->children.size() == 1){
+    if ((int)root->children.size() == 1)
+    {
         ANALYSIS(funcfparam, FuncFParam, 0);
-    }else{
+    }
+    else
+    {
         ANALYSIS(funcfparam, FuncFParam, 0);
         int i = 1;
-        while (i < (int)root->children.size()){
-            ANALYSIS(funcfparam, FuncFParam, i+1);
+        while (i < (int)root->children.size())
+        {
+            ANALYSIS(funcfparam, FuncFParam, i + 1);
             i += 2;
         }
     }
 }
 
-void frontend::Analyzer::analysisBlock(Block* root, vector<ir::Instruction*>& buffer){
-    symbol_table.add_scope(root);   
-    if ((int)root->children.size() > 2){
+void frontend::Analyzer::analysisBlock(Block *root, vector<ir::Instruction *> &buffer)
+{
+
+    symbol_table.add_scope(root);
+
+    if ((int)root->children.size() > 2)
+    {
         int i = 1;
-        while (i < (int)root->children.size()-1){
+        while (i < (int)root->children.size() - 1)
+        {
             ANALYSIS(blockitem, BlockItem, i);
             i += 1;
         }
     }
 
-    symbol_table.exit_scope();  
+    symbol_table.exit_scope();
 }
 
-void frontend::Analyzer::analysisBlockItem(BlockItem* root, vector<ir::Instruction*>& buffer){
+void frontend::Analyzer::analysisBlockItem(BlockItem *root, vector<ir::Instruction *> &buffer)
+{
 
-    if (root->children[0]->type == NodeType::DECL){     
+    if (root->children[0]->type == NodeType::DECL)
+    {
         ANALYSIS(decl, Decl, 0);
-    }else if (root->children[0]->type == NodeType::STMT){   
+    }
+    else if (root->children[0]->type == NodeType::STMT)
+    {
         ANALYSIS(stmt, Stmt, 0);
     }
 }
 
-void frontend::Analyzer::analysisStmt(Stmt* root, vector<ir::Instruction*>& buffer){
+void frontend::Analyzer::analysisStmt(Stmt *root, vector<ir::Instruction *> &buffer)
+{
 
-    if (root->children[0]->type == NodeType::LVAL){     
-        ANALYSIS(exp, Exp, 2);  
-        ANALYSIS(lval, LVal, 0);    
-
-    }else if (root->children[0]->type == NodeType::BLOCK){   
-
+    if (root->children[0]->type == NodeType::LVAL)
+    {
+        ANALYSIS(exp, Exp, 2);
+        ANALYSIS(lval, LVal, 0);
+    }
+    else if (root->children[0]->type == NodeType::BLOCK)
+    {
         ANALYSIS(block, Block, 0);
-
-    }else if (root->children[0]->type == NodeType::EXP){    
-
+    }
+    else if (root->children[0]->type == NodeType::EXP)
+    {
         ANALYSIS(exp, Exp, 0);
+    }
+    else if (dynamic_cast<Term *>(root->children[0])->token.type == TokenType::IFTK)
+    {
 
-    }else if (dynamic_cast<Term*>(root->children[0])->token.type == TokenType::IFTK){  
-        
-
-        auto tmp1 = vector<Instruction*>();
+        auto tmp1 = vector<Instruction *>();
         GET_CHILD_PTR(cond, Cond, 2);
-        analysisCond(cond, tmp1);    
-        buffer.insert(buffer.end(), tmp1.begin(), tmp1.end());    
+        analysisCond(cond, tmp1);
+        buffer.insert(buffer.end(), tmp1.begin(), tmp1.end());
+        buffer.push_back(new Instruction(Operand(cond->v, cond->t), Operand(), Operand("2", Type::IntLiteral), Operator::_goto));
+        GET_CHILD_PTR(stmt1, Stmt, 4);
+        auto tmp2 = vector<Instruction *>();
+        analysisStmt(stmt1, tmp2);
 
-        
-        buffer.push_back(new Instruction(Operand(cond->v,cond->t), Operand(), Operand("2",Type::IntLiteral), Operator::_goto));
+        if ((int)root->children.size() == 5)
+        {
 
-        
-        GET_CHILD_PTR(stmt1, Stmt, 4);   
-        auto tmp2 = vector<Instruction*>();  
-        analysisStmt(stmt1, tmp2);   
+            buffer.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp2.size() + 1), Type::IntLiteral), Operator::_goto}));
 
-        if ((int)root->children.size() == 5){    
-            buffer.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp2.size()+1), Type::IntLiteral), Operator::_goto}));
             buffer.insert(buffer.end(), tmp2.begin(), tmp2.end());
-            buffer.push_back(new Instruction({Operand(), Operand(), Operand(), Operator::unused}));
 
-        }else{      
-            auto tmp3 = vector<Instruction*>();     
-            GET_CHILD_PTR(stmt2, Stmt, 6);   
-            analysisStmt(stmt2, tmp3);   
-            tmp2.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp3.size()+1), Type::IntLiteral), Operator::_goto}));
-            buffer.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp2.size()+1), Type::IntLiteral), Operator::_goto}));
+            buffer.push_back(new Instruction({Operand(), Operand(), Operand(), Operator::unused}));
+        }
+        else
+        {
+            auto tmp3 = vector<Instruction *>();
+            GET_CHILD_PTR(stmt2, Stmt, 6);
+            analysisStmt(stmt2, tmp3);
+            tmp2.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp3.size() + 1), Type::IntLiteral), Operator::_goto}));
+            buffer.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp2.size() + 1), Type::IntLiteral), Operator::_goto}));
             buffer.insert(buffer.end(), tmp2.begin(), tmp2.end());
             buffer.insert(buffer.end(), tmp3.begin(), tmp3.end());
             buffer.push_back(new Instruction({Operand(), Operand(), Operand(), Operator::unused}));
         }
-    }else if (dynamic_cast<Term*>(root->children[0])->token.type == TokenType::WHILETK){   
+    }
+    else if (dynamic_cast<Term *>(root->children[0])->token.type == TokenType::WHILETK)
+    {
         GET_CHILD_PTR(cond, Cond, 2);
-        auto tmp1 = vector<Instruction*>();  
+        auto tmp1 = vector<Instruction *>();
         analysisCond(cond, tmp1);
 
         GET_CHILD_PTR(stmt, Stmt, 4);
-        auto tmp2 = vector<Instruction*>();  
+        auto tmp2 = vector<Instruction *>();
         analysisStmt(stmt, tmp2);
-        
+
         tmp2.push_back(new Instruction({Operand("continue", Type::null), Operand(), Operand(), Operator::unused}));
 
-        
-        for (int i=0; i<(int)tmp2.size(); i++){
-            if (tmp2[i]->op == Operator::unused && tmp2[i]->op1.type == Type::null){
-                if (tmp2[i]->op1.name == "break"){
-                    tmp2[i] = new Instruction({Operand(), Operand(), Operand(std::to_string((int)tmp2.size()-i),Type::IntLiteral), Operator::_goto});
+        for (int i = 0; i < (int)tmp2.size(); i++)
+        {
+            if (tmp2[i]->op == Operator::unused && tmp2[i]->op1.type == Type::null)
+            {
+                if (tmp2[i]->op1.name == "break")
+                {
+                    tmp2[i] = new Instruction({Operand(), Operand(), Operand(std::to_string((int)tmp2.size() - i), Type::IntLiteral), Operator::_goto});
                 }
-                else if (tmp2[i]->op1.name == "continue"){
-                    auto goto_inst = new Instruction({Operand(), Operand(), Operand(std::to_string(-(2+i+(int)tmp1.size())), Type::IntLiteral), Operator::_goto});
+                else if (tmp2[i]->op1.name == "continue")
+                {
+                    auto goto_inst = new Instruction({Operand(), Operand(), Operand(std::to_string(-(2 + i + (int)tmp1.size())), Type::IntLiteral), Operator::_goto});
                     tmp2[i] = goto_inst;
                 }
             }
         }
 
-        
-        buffer.insert(buffer.end(), tmp1.begin(), tmp1.end());        
-        buffer.push_back(new Instruction({Operand(cond->v,cond->t), Operand(), Operand("2",Type::IntLiteral), Operator::_goto}));
-        buffer.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp2.size()+1), Type::IntLiteral), Operator::_goto}));
-        buffer.insert(buffer.end(), tmp2.begin(), tmp2.end());
-        buffer.push_back(new Instruction(Operand(), Operand(), Operand(), Operator::unused));
+        buffer.insert(buffer.end(), tmp1.begin(), tmp1.end());
 
-    }else if (dynamic_cast<Term*>(root->children[0])->token.type == TokenType::BREAKTK){   
+        buffer.push_back(new Instruction({Operand(cond->v, cond->t), Operand(), Operand("2", Type::IntLiteral), Operator::_goto}));
+
+        buffer.push_back(new Instruction({Operand(), Operand(), Operand(std::to_string(tmp2.size() + 1), Type::IntLiteral), Operator::_goto}));
+
+        buffer.insert(buffer.end(), tmp2.begin(), tmp2.end());
+
+        buffer.push_back(new Instruction(Operand(), Operand(), Operand(), Operator::unused));
+    }
+    else if (dynamic_cast<Term *>(root->children[0])->token.type == TokenType::BREAKTK)
+    {
+
         buffer.push_back(new Instruction({Operand("break", Type::null), Operand(), Operand(), Operator::unused}));
-    }else if (dynamic_cast<Term*>(root->children[0])->token.type == TokenType::CONTINUETK){    
+    }
+    else if (dynamic_cast<Term *>(root->children[0])->token.type == TokenType::CONTINUETK)
+    {
+
         buffer.push_back(new Instruction({Operand("continue", Type::null), Operand(), Operand(), Operator::unused}));
-    }else if (dynamic_cast<Term*>(root->children[0])->token.type == TokenType::RETURNTK){  
-        if ((int)root->children.size() == 2){
-            Instruction* return_inst = new Instruction({Operand("null", Type::null), Operand(), Operand(), Operator::_return});
+    }
+    else if (dynamic_cast<Term *>(root->children[0])->token.type == TokenType::RETURNTK)
+    {
+
+        if ((int)root->children.size() == 2)
+        {
+            Instruction *return_inst = new Instruction({Operand("null", Type::null), Operand(), Operand(), Operator::_return});
             buffer.push_back(return_inst);
-        }else{
-            
-            auto tmp = vector<Instruction*>();
+        }
+        else
+        {
+
+            auto tmp = vector<Instruction *>();
             GET_CHILD_PTR(exp, Exp, 1);
             analysisExp(exp, tmp);
-            buffer.insert(buffer.end(), tmp.begin(), tmp.end());     
-            std::cout<<curr_function->name<<std::endl;
-            std::cout<<toString(curr_function->returnType)<<std::endl;
+            buffer.insert(buffer.end(), tmp.begin(), tmp.end());
+
+            std::cout << curr_function->name << std::endl;
+            std::cout << toString(curr_function->returnType) << std::endl;
+
             if (curr_function->returnType == Type::Int)
             {
-                if (exp->t == Type::Int || exp->t == Type::IntLiteral){
-                    Instruction* rerurn_inst = new Instruction({Operand(exp->v, exp->t), Operand(), Operand(), Operator::_return});
-                    buffer.push_back(rerurn_inst);  
-                    std::cout<<toString(exp->t)<<std::endl;
 
+                if (exp->t == Type::Int || exp->t == Type::IntLiteral)
+                {
+                    Instruction *rerurn_inst = new Instruction({Operand(exp->v, exp->t), Operand(), Operand(), Operator::_return});
+                    buffer.push_back(rerurn_inst);
+
+                    std::cout << toString(exp->t) << std::endl;
                 }
-                else if (exp->t == Type::FloatLiteral){
+
+                else if (exp->t == Type::FloatLiteral)
+                {
                     buffer.push_back(new Instruction({Operand(std::to_string((int)std::stof(exp->v)), Type::IntLiteral), Operand(), Operand(), Operator::_return}));
-                    std::cout<<toString(exp->t)<<std::endl;
+                    std::cout << toString(exp->t) << std::endl;
                 }
-                else if (exp->t == Type::Float){
+                else if (exp->t == Type::Float)
+                {
                     Operand tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
-                    buffer.push_back(new Instruction(Operand(exp->v,Type::Float), Operand(), tmp, Operator::cvt_f2i));
+                    buffer.push_back(new Instruction(Operand(exp->v, Type::Float), Operand(), tmp, Operator::cvt_f2i));
                     buffer.push_back(new Instruction(tmp, Operand(), Operand(), Operator::_return));
-                    std::cout<<toString(exp->t)<<std::endl;
+                    std::cout << toString(exp->t) << std::endl;
                 }
             }
             else if (curr_function->returnType == Type::Float)
             {
-                if (exp->t == Type::Float || exp->t == Type::FloatLiteral){
-                    Instruction* retInst = new Instruction(Operand(exp->v,exp->t), Operand(), Operand(), Operator::_return);
+
+                if (exp->t == Type::Float || exp->t == Type::FloatLiteral)
+                {
+                    Instruction *retInst = new Instruction(Operand(exp->v, exp->t), Operand(), Operand(), Operator::_return);
                     buffer.push_back(retInst);
-                    std::cout<<toString(exp->t)<<std::endl;
+                    std::cout << toString(exp->t) << std::endl;
                 }
-                else if (exp->t == Type::IntLiteral){
+
+                else if (exp->t == Type::IntLiteral)
+                {
                     float val = (float)std::stoi(exp->v);
-                    Instruction* retInst = new Instruction(Operand(std::to_string(val),Type::FloatLiteral), Operand(), Operand(), Operator::_return);
+                    Instruction *retInst = new Instruction(Operand(std::to_string(val), Type::FloatLiteral), Operand(), Operand(), Operator::_return);
                     buffer.push_back(retInst);
-                    std::cout<<toString(exp->t)<<std::endl;
+                    std::cout << toString(exp->t) << std::endl;
                 }
-                else if (exp->t == Type::Int){
+                else if (exp->t == Type::Int)
+                {
                     Operand tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
-                    Instruction* cvtInst = new Instruction(Operand(exp->v, exp->t), Operand(), tmp, Operator::cvt_i2f);
-                    Instruction* retInst = new Instruction(tmp, Operand(), Operand(), Operator::_return);
+                    Instruction *cvtInst = new Instruction(Operand(exp->v, exp->t), Operand(), tmp, Operator::cvt_i2f);
+                    Instruction *retInst = new Instruction(tmp, Operand(), Operand(), Operator::_return);
                     buffer.push_back(cvtInst);
                     buffer.push_back(retInst);
-                    std::cout<<toString(exp->t)<<std::endl;
+                    std::cout << toString(exp->t) << std::endl;
                 }
             }
         }
     }
 }
 
-void frontend::Analyzer::analysisExp(Exp* root, vector<ir::Instruction*>& buffer){
-    ANALYSIS(addexp, AddExp, 0);    
+void frontend::Analyzer::analysisExp(Exp *root, vector<ir::Instruction *> &buffer)
+{
+
+    ANALYSIS(addexp, AddExp, 0);
     COPY_EXP_NODE(addexp, root);
 }
 
-void frontend::Analyzer::analysisCond(Cond* root, vector<ir::Instruction*>& buffer){
-    ANALYSIS(lorexp, LOrExp, 0);    
+void frontend::Analyzer::analysisCond(Cond *root, vector<ir::Instruction *> &buffer)
+{
+    ANALYSIS(lorexp, LOrExp, 0);
     COPY_EXP_NODE(lorexp, root);
 }
 
-void frontend::Analyzer::analysisLVal(LVal* root, vector<ir::Instruction*>& buffer){
-    auto tk = dynamic_cast<Term*>(root->children[0])->token;    
-    auto op = symbol_table.get_operand(tk.value);   
-    root->t = op.type;  
-    if((int)root->children.size() == 1){     
+void frontend::Analyzer::analysisLVal(LVal *root, vector<ir::Instruction *> &buffer)
+{
+
+    auto tk = dynamic_cast<Term *>(root->children[0])->token;
+
+    auto op = symbol_table.get_operand(tk.value);
+    root->t = op.type;
+
+    if ((int)root->children.size() == 1)
+    {
+
         root->v = op.name;
         root->is_computable = (root->t == Type::IntLiteral || root->t == Type::FloatLiteral) ? true : false;
         root->i = 0;
-        if (root->parent->type == NodeType::STMT){   
-            auto exp_par = dynamic_cast<Exp*>(root->parent->children[2]);   
+
+        if (root->parent->type == NodeType::STMT)
+        {
+            auto exp_par = dynamic_cast<Exp *>(root->parent->children[2]);
             auto op1 = Operand(exp_par->v, exp_par->t);
             auto des = Operand(root->v, root->t);
-            if (root->t == Type::Int){
+            if (root->t == Type::Int)
+            {
                 auto mov_inst = new Instruction({op1, Operand(), des, Operator::mov});
-                buffer.push_back(mov_inst);    
-            }else{
-                buffer.push_back(new Instruction({op1, Operand(), des, Operator::fmov}));    
+                buffer.push_back(mov_inst);
+            }
+            else
+            {
+                buffer.push_back(new Instruction({op1, Operand(), des, Operator::fmov}));
             }
         }
-    }else{      
+    }
+    else
+    {
+
         STE arr = symbol_table.get_ste(tk.value);
-        vector<int> dimension = arr.dimension;  
-        if ((int)root->children.size() == 4){     
+        vector<int> dimension = arr.dimension;
+        int size = dimension.size();
+
+        if ((int)root->children.size() == 4)
+        {
+
             ANALYSIS(exp, Exp, 2);
             Type t = (root->t == Type::IntPtr) ? Type::Int : Type::Float;
             root->t = t;
-            Operand index = Operand(exp->v, exp->t);    
-            if (root->parent->type == NodeType::STMT){   
-                auto exp_par = dynamic_cast<Exp*>(root->parent->children[2]);   
+            Operand index = Operand(exp->v, exp->t);
+            if (root->parent->type == NodeType::STMT)
+            {
+                auto exp_par = dynamic_cast<Exp *>(root->parent->children[2]);
                 Operand des = Operand(exp_par->v, exp_par->t);
-                buffer.push_back(new Instruction({arr.operand, index, des, Operator::store}));  
+                buffer.push_back(new Instruction({arr.operand, index, des, Operator::store}));
                 root->v = des.name;
-            }else{      
-                Operand des = Operand("t" + std::to_string(tmp_cnt++), t);     
-                buffer.push_back(new Instruction({arr.operand, index, des, Operator::load}));  
+            }
+            else
+            {
+                Operand des = Operand("t" + std::to_string(tmp_cnt++), t);
+                buffer.push_back(new Instruction({arr.operand, index, des, Operator::load}));
                 root->v = des.name;
-            }                   
-        }else{      
+            }
+        }
+        else
+        {
+
             ANALYSIS(exp1, Exp, 2);
             ANALYSIS(exp2, Exp, 5);
             Type t = (root->t == Type::IntPtr) ? Type::Int : Type::Float;
             root->t = t;
-            if (exp1->is_computable && exp2->is_computable){    
+            if (exp1->is_computable && exp2->is_computable)
+            {
                 std::string i = std::to_string(std::stoi(exp1->v) * dimension[1] + std::stoi(exp2->v));
-                Operand index = Operand(i, Type::IntLiteral);    
-                if (root->parent->type == NodeType::STMT){   
-                    auto exp_par = dynamic_cast<Exp*>(root->parent->children[2]);   
+                Operand index = Operand(i, Type::IntLiteral);
+                if (root->parent->type == NodeType::STMT)
+                {
+                    auto exp_par = dynamic_cast<Exp *>(root->parent->children[2]);
                     Operand des = Operand(exp_par->v, exp_par->t);
                     buffer.push_back(new Instruction({arr.operand, index, des, Operator::store}));
                     root->v = des.name;
-                }else{
-                    Operand des = Operand("t" + std::to_string(tmp_cnt++), t);     
+                }
+                else
+                {
+                    Operand des = Operand("t" + std::to_string(tmp_cnt++), t);
                     buffer.push_back(new Instruction({arr.operand, index, des, Operator::load}));
                     root->v = des.name;
                 }
-            }else{      
+            }
+            else
+            {
                 auto op1 = Operand(exp1->v, exp1->t);
                 auto op2 = Operand(std::to_string(dimension[1]), Type::IntLiteral);
                 auto op3 = Operand(exp2->v, exp2->t);
@@ -818,12 +1064,15 @@ void frontend::Analyzer::analysisLVal(LVal* root, vector<ir::Instruction*>& buff
                 auto tmp2 = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
                 buffer.push_back(new Instruction({op1, op2, tmp1, Operator::mul}));
                 buffer.push_back(new Instruction({tmp1, op3, tmp2, Operator::add}));
-                if (root->parent->type == NodeType::STMT){   
-                    auto exp_par = dynamic_cast<Exp*>(root->parent->children[2]);   
+                if (root->parent->type == NodeType::STMT)
+                {
+                    auto exp_par = dynamic_cast<Exp *>(root->parent->children[2]);
                     Operand des = Operand(exp_par->v, exp_par->t);
                     buffer.push_back(new Instruction({arr.operand, tmp2, des, Operator::store}));
                     root->v = des.name;
-                }else{
+                }
+                else
+                {
                     Operand des = Operand("t" + std::to_string(tmp_cnt++), t);
                     buffer.push_back(new Instruction({arr.operand, tmp2, des, Operator::load}));
                     root->v = des.name;
@@ -833,85 +1082,130 @@ void frontend::Analyzer::analysisLVal(LVal* root, vector<ir::Instruction*>& buff
     }
 }
 
-void frontend::Analyzer::analysisPrimaryExp(PrimaryExp* root, vector<ir::Instruction*>& buffer){
-    if (root->children[0]->type == NodeType::TERMINAL){     
-        ANALYSIS(exp, Exp, 1);  
+void frontend::Analyzer::analysisPrimaryExp(PrimaryExp *root, vector<ir::Instruction *> &buffer)
+{
+
+    if (root->children[0]->type == NodeType::TERMINAL)
+    {
+
+        ANALYSIS(exp, Exp, 1);
         COPY_EXP_NODE(exp, root);
-    }else if (root->children[0]->type == NodeType::LVAL){   
-        ANALYSIS(lval, LVal, 0);    
+    }
+    else if (root->children[0]->type == NodeType::LVAL)
+    {
+
+        ANALYSIS(lval, LVal, 0);
         COPY_EXP_NODE(lval, root);
-    }else{  
-        root->is_computable = true; 
-        auto number_tk = dynamic_cast<Term*>(root->children[0]->children[0])->token;  
-        root->t = (number_tk.type==TokenType::INTLTR) ? Type::IntLiteral : Type::FloatLiteral;      
-        if (root->t == Type::IntLiteral){
-            root->v = trans2ten(number_tk.value);     
-        }else{
+    }
+    else
+    {
+        root->is_computable = true;
+        auto number_tk = dynamic_cast<Term *>(root->children[0]->children[0])->token;
+        root->t = (number_tk.type == TokenType::INTLTR) ? Type::IntLiteral : Type::FloatLiteral;
+        if (root->t == Type::IntLiteral)
+        {
+            root->v = trans2ten(number_tk.value);
+        }
+        else
+        {
             root->v = number_tk.value;
         }
     }
 }
 
-void frontend::Analyzer::analysisUnaryExp(UnaryExp* root, vector<ir::Instruction*>& buffer){
-    if (root->children[0]->type == NodeType::PRIMARYEXP){   
-        ANALYSIS(primaryexp, PrimaryExp, 0);
-        COPY_EXP_NODE(primaryexp, root);    
+void frontend::Analyzer::analysisUnaryExp(UnaryExp *root, vector<ir::Instruction *> &buffer)
+{
 
-    }else if (root->children[0]->type == NodeType::TERMINAL){   
-        std::string func_name = dynamic_cast<Term*>(root->children[0])->token.value;   
-        auto op1 = Operand(func_name, Type::null);  
-        Type t = symbol_table.functions[func_name]->returnType;     
-        auto des = Operand("t" + std::to_string(tmp_cnt++), t);     
-        if ((int)root->children.size() == 3){    
+    if (root->children[0]->type == NodeType::PRIMARYEXP)
+    {
+
+        ANALYSIS(primaryexp, PrimaryExp, 0);
+        COPY_EXP_NODE(primaryexp, root);
+    }
+    else if (root->children[0]->type == NodeType::TERMINAL)
+    {
+
+        std::string func_name = dynamic_cast<Term *>(root->children[0])->token.value;
+        auto op1 = Operand(func_name, Type::null);
+        Type t = symbol_table.functions[func_name]->returnType;
+        auto des = Operand("t" + std::to_string(tmp_cnt++), t);
+        if ((int)root->children.size() == 3)
+        {
             buffer.push_back(new ir::CallInst(op1, des));
-        }else{
-            auto callinst = new ir::CallInst(op1, vector<Operand>(), des);  
-            GET_CHILD_PTR(funcrparams, FuncRParams, 2);     
+        }
+        else
+        {
+            auto callinst = new ir::CallInst(op1, vector<Operand>(), des);
+            GET_CHILD_PTR(funcrparams, FuncRParams, 2);
             assert(funcrparams);
             analysisFuncRParams(funcrparams, buffer, *callinst);
-            buffer.push_back(callinst);     
+            buffer.push_back(callinst);
         }
         root->v = des.name;
         root->t = t;
-    }else{      
-        auto tk = dynamic_cast<Term*>(root->children[0]->children[0])->token.type;
-        ANALYSIS(unaryexp, UnaryExp, 1);    
-        if (tk == TokenType::PLUS){     
+    }
+    else
+    {
+        auto tk = dynamic_cast<Term *>(root->children[0]->children[0])->token.type;
+        ANALYSIS(unaryexp, UnaryExp, 1);
+        if (tk == TokenType::PLUS)
+        {
             COPY_EXP_NODE(unaryexp, root);
-        }else{      
+        }
+        else
+        {
             root->is_computable = unaryexp->is_computable;
             root->t = unaryexp->t;
-            if (unaryexp->is_computable){   
-                if (unaryexp->t == Type::IntLiteral){  
-                    if (tk == TokenType::MINU){
-                        root->v = std::to_string(- std::stoi(unaryexp->v));
-                    }else{
-                        root->v = std::to_string(! std::stoi(unaryexp->v));
+            if (unaryexp->is_computable)
+            {
+                if (unaryexp->t == Type::IntLiteral)
+                {
+                    if (tk == TokenType::MINU)
+                    {
+                        root->v = std::to_string(-std::stoi(unaryexp->v));
                     }
-                }else{  
-                    if (tk == TokenType::MINU){
-                        root->v = std::to_string(- std::stof(unaryexp->v));
-                    }else{
-                        root->v = std::to_string(! std::stof(unaryexp->v));
+                    else
+                    {
+                        root->v = std::to_string(!std::stoi(unaryexp->v));
                     }
                 }
-            }else{  
-                if (unaryexp->t == Type::Int){      
+                else
+                {
+                    if (tk == TokenType::MINU)
+                    {
+                        root->v = std::to_string(-std::stof(unaryexp->v));
+                    }
+                    else
+                    {
+                        root->v = std::to_string(!std::stof(unaryexp->v));
+                    }
+                }
+            }
+            else
+            {
+                if (unaryexp->t == Type::Int)
+                {
                     auto op1 = Operand(unaryexp->v, unaryexp->t);
                     auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
-                    if (tk == TokenType::MINU){
+                    if (tk == TokenType::MINU)
+                    {
                         auto tmp1 = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
                         buffer.push_back(new Instruction(Operand("0", Type::IntLiteral), Operand(), tmp, Operator::def));
                         buffer.push_back(new Instruction(tmp, op1, tmp1, Operator::sub));
                         root->v = tmp1.name;
-                    }else{
+                    }
+                    else
+                    {
                         buffer.push_back(new Instruction(op1, Operand(), tmp, Operator::_not));
                         root->v = tmp.name;
                     }
-                }else{      
+                }
+                else
+                {
                     auto op1 = Operand(unaryexp->v, unaryexp->t);
                     auto tmp = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
-                    if (tk == TokenType::MINU){
+                    if (tk == TokenType::MINU)
+                    {
                         auto tmp1 = Operand("t" + std::to_string(tmp_cnt++), Type::Float);
                         buffer.push_back(new Instruction(Operand("0.0", Type::FloatLiteral), Operand(), tmp, Operator::fdef));
                         buffer.push_back(new Instruction(tmp, op1, tmp1, Operator::fsub));
@@ -923,97 +1217,140 @@ void frontend::Analyzer::analysisUnaryExp(UnaryExp* root, vector<ir::Instruction
     }
 }
 
-
-
-void frontend::Analyzer::analysisFuncRParams(FuncRParams* root, vector<ir::Instruction*>& buffer, ir::CallInst& callinst){
-    ANALYSIS(exp1, Exp, 0);  
+void frontend::Analyzer::analysisFuncRParams(FuncRParams *root, vector<ir::Instruction *> &buffer, ir::CallInst &callinst)
+{
+    ANALYSIS(exp1, Exp, 0);
     callinst.argumentList.push_back(Operand(exp1->v, exp1->t));
     int i = 1;
-    while (i < (int)root->children.size()){
-        ANALYSIS(exp2, Exp, i+1);  
+    while (i < (int)root->children.size())
+    {
+        ANALYSIS(exp2, Exp, i + 1);
         callinst.argumentList.push_back(Operand(exp2->v, exp2->t));
         i += 2;
     }
 }
 
+void frontend::Analyzer::analysisMulExp(MulExp *root, vector<ir::Instruction *> &buffer)
+{
 
+    if ((int)root->children.size() == 1)
+    {
 
-void frontend::Analyzer::analysisMulExp(MulExp* root, vector<ir::Instruction*>& buffer){
-    if ((int)root->children.size() == 1){
-        ANALYSIS(unaryexp1, UnaryExp, 0);    
-        COPY_EXP_NODE(unaryexp1, root);    
-    }else if ((int)root->children.size() > 1){
-        ANALYSIS(unaryexp1, UnaryExp, 0);    
+        ANALYSIS(unaryexp1, UnaryExp, 0);
+        COPY_EXP_NODE(unaryexp1, root);
+    }
+    else if ((int)root->children.size() > 1)
+    {
+        ANALYSIS(unaryexp1, UnaryExp, 0);
         root->is_computable = unaryexp1->is_computable;
         root->t = unaryexp1->t;
         root->v = unaryexp1->v;
         int i = 1;
-        while (i < (int)root->children.size()){
-            auto tk = dynamic_cast<Term*>(root->children[i])->token.type;   
-            ANALYSIS(unaryexp2, UnaryExp, i+1);     
-            if(root->is_computable && unaryexp2->is_computable){    
+        while (i < (int)root->children.size())
+        {
+            auto tk = dynamic_cast<Term *>(root->children[i])->token.type;
+            ANALYSIS(unaryexp2, UnaryExp, i + 1);
+            if (root->is_computable && unaryexp2->is_computable)
+            {
                 root->is_computable = true;
-                if(root->t != unaryexp2->t){   
+                if (root->t != unaryexp2->t)
+                {
                     root->t = Type::FloatLiteral;
                 }
 
-                if(root->t == Type::IntLiteral){    
-                    if (tk == TokenType::MULT){
+                if (root->t == Type::IntLiteral)
+                {
+                    if (tk == TokenType::MULT)
+                    {
                         root->v = std::to_string(std::stoi(root->v) * std::stoi(unaryexp2->v));
-                    }else if (tk == TokenType::DIV){
+                    }
+                    else if (tk == TokenType::DIV)
+                    {
                         root->v = std::to_string(std::stoi(root->v) / std::stoi(unaryexp2->v));
-                    }else{
+                    }
+                    else
+                    {
                         root->v = std::to_string(std::stoi(root->v) % std::stoi(unaryexp2->v));
                     }
-                }else{      
-                    if (tk == TokenType::MULT){
+                }
+                else
+                {
+                    if (tk == TokenType::MULT)
+                    {
                         root->v = std::to_string(std::stof(root->v) * std::stof(unaryexp2->v));
-                    }else if (tk == TokenType::DIV){
+                    }
+                    else if (tk == TokenType::DIV)
+                    {
                         root->v = std::to_string(std::stof(root->v) / std::stof(unaryexp2->v));
                     }
                 }
-            }else{  
+            }
+            else
+            {
                 root->is_computable = false;
                 Operand op1 = Operand(root->v, root->t);
                 Operand op2 = Operand(unaryexp2->v, unaryexp2->t);
                 Operand tmp = Operand("t" + std::to_string(tmp_cnt++), root->t);
-                if (tk == TokenType::MULT){
-                    if (root->t == unaryexp2->t){   
-                        if (tmp.type == Type::Int){
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::mul}));  
-                        }else{
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fmul}));  
+                if (tk == TokenType::MULT)
+                {
+                    if (root->t == unaryexp2->t)
+                    {
+                        if (tmp.type == Type::Int)
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::mul}));
                         }
-                    }else{      
-                        type_transform(op1, op2, buffer);
-                        tmp.type = op1.type;     
-                        if (tmp.type == Type::Int){
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::mul}));  
-                        }else{
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fmul}));  
+                        else
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fmul}));
                         }
                     }
-                }else if (tk == TokenType::DIV){
-                    if (root->t == unaryexp2->t){   
-                        if (tmp.type == Type::Int){
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::div}));  
-                        }else{
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fdiv}));  
-                        }
-                    }else{
+                    else
+                    {
                         type_transform(op1, op2, buffer);
                         tmp.type = op1.type;
-                        if(tmp.type == Type::Int){
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::div}));  
-                        }else{
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fdiv}));  
+                        if (tmp.type == Type::Int)
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::mul}));
+                        }
+                        else
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fmul}));
                         }
                     }
-                }else{
-                    buffer.push_back(new Instruction({op1, op2, tmp, Operator::mod}));  
                 }
-                root->v = tmp.name;     
-                root->t = tmp.type;     
+                else if (tk == TokenType::DIV)
+                {
+                    if (root->t == unaryexp2->t)
+                    {
+                        if (tmp.type == Type::Int)
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::div}));
+                        }
+                        else
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fdiv}));
+                        }
+                    }
+                    else
+                    {
+                        type_transform(op1, op2, buffer);
+                        tmp.type = op1.type;
+                        if (tmp.type == Type::Int)
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::div}));
+                        }
+                        else
+                        {
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fdiv}));
+                        }
+                    }
+                }
+                else
+                {
+                    buffer.push_back(new Instruction({op1, op2, tmp, Operator::mod}));
+                }
+                root->v = tmp.name;
+                root->t = tmp.type;
             }
 
             i += 2;
@@ -1021,108 +1358,170 @@ void frontend::Analyzer::analysisMulExp(MulExp* root, vector<ir::Instruction*>& 
     }
 }
 
-void frontend::Analyzer::analysisAddExp(AddExp* root, vector<ir::Instruction*>& buffer){
-    if ((int)root->children.size() == 1){
-        ANALYSIS(mulexp1, MulExp, 0);    
-        COPY_EXP_NODE(mulexp1, root);    
-    }else if ((int)root->children.size() > 1){  
-        ANALYSIS(mulexp1, MulExp, 0);    
+void frontend::Analyzer::analysisAddExp(AddExp *root, vector<ir::Instruction *> &buffer)
+{
+
+    if ((int)root->children.size() == 1)
+    {
+
+        ANALYSIS(mulexp1, MulExp, 0);
+        COPY_EXP_NODE(mulexp1, root);
+    }
+    else if ((int)root->children.size() > 1)
+    {
+
+        ANALYSIS(mulexp1, MulExp, 0);
+
         root->is_computable = mulexp1->is_computable;
         root->t = mulexp1->t;
         root->v = mulexp1->v;
+
         int i = 1;
-        while (i < (int)root->children.size()){
-            auto tk = dynamic_cast<Term*>(root->children[i])->token.type;   
-            ANALYSIS(mulexp2, MulExp, i+1);     
-            if(root->is_computable && mulexp2->is_computable){    
+        while (i < (int)root->children.size())
+        {
+
+            auto tk = dynamic_cast<Term *>(root->children[i])->token.type;
+            ANALYSIS(mulexp2, MulExp, i + 1);
+            if (root->is_computable && mulexp2->is_computable)
+            {
                 root->is_computable = true;
-                if(root->t != mulexp2->t){   
+                if (root->t != mulexp2->t)
+                {
                     root->t = Type::FloatLiteral;
                 }
-                if(root->t == Type::IntLiteral){    
-                    if (tk == TokenType::PLUS){
-                        root->v = std::to_string(std::stoi(root->v) + std::stoi(mulexp2->v));    
-                    }else{  
+
+                if (root->t == Type::IntLiteral)
+                {
+                    if (tk == TokenType::PLUS)
+                    {
+                        root->v = std::to_string(std::stoi(root->v) + std::stoi(mulexp2->v));
+                    }
+                    else
+                    {
                         root->v = std::to_string(std::stoi(root->v) - std::stoi(mulexp2->v));
                     }
-                }else{      
-                    if (tk == TokenType::PLUS){
-                        root->v = std::to_string(std::stof(root->v) + std::stof(mulexp2->v));    
-                    }else{  
+                }
+                else
+                {
+                    if (tk == TokenType::PLUS)
+                    {
+                        root->v = std::to_string(std::stof(root->v) + std::stof(mulexp2->v));
+                    }
+                    else
+                    {
                         root->v = std::to_string(std::stof(root->v) - std::stof(mulexp2->v));
                     }
                 }
-            }else{  
+            }
+            else
+            {
                 root->is_computable = false;
                 Operand op1 = Operand(root->v, root->t);
                 Operand op2 = Operand(mulexp2->v, mulexp2->t);
                 Operand tmp = Operand("t" + std::to_string(tmp_cnt++), root->t);
-                if (!root->is_computable && !mulexp2->is_computable){   
-                    if (tk == TokenType::PLUS){
-                        if (root->t == mulexp2->t){   
-                            if (tmp.type == Type::Int){
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::add}));  
-                            }else{
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fadd}));  
+                if (!root->is_computable && !mulexp2->is_computable)
+                {
+                    if (tk == TokenType::PLUS)
+                    {
+                        if (root->t == mulexp2->t)
+                        {
+                            if (tmp.type == Type::Int)
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::add}));
                             }
-                        }else{  
-                            type_transform(op1, op2, buffer);
-                            tmp.type = op1.type;
-                            if (tmp.type == Type::Int){
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::add}));  
-                            }else{
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fadd}));  
+                            else
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fadd}));
                             }
                         }
-                    }else{
-                        if (root->t == mulexp2->t){   
-                            if (tmp.type == Type::Int){
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::sub}));  
-                            }else{
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fsub}));  
-                            }
-                        }else{  
+                        else
+                        {
                             type_transform(op1, op2, buffer);
                             tmp.type = op1.type;
-                            if (tmp.type == Type::Int){
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::sub}));
-                            }else{
-                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fsub}));  
+                            if (tmp.type == Type::Int)
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::add}));
+                            }
+                            else
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fadd}));
                             }
                         }
                     }
-                }else{
-                    if (tk == TokenType::PLUS){
-                        if (root->t == Type::Int && mulexp2->t == Type::IntLiteral){    
-                            tmp.type = Type::Int;
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::addi}));  
-                        }else if (root->t == Type::IntLiteral && mulexp2->t == Type::Int){  
-                            tmp.type = Type::Int;
-                            buffer.push_back(new Instruction({op2, op1, tmp, Operator::addi}));  
-                        }else{  
-                            tmp.type = Type::Float;
-                            type_transform(op1, op2, buffer);
-                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fadd}));  
+                    else
+                    {
+                        if (root->t == mulexp2->t)
+                        {
+                            if (tmp.type == Type::Int)
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::sub}));
+                            }
+                            else
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fsub}));
+                            }
                         }
-                    }else{
-                        if (root->t == Type::Int && mulexp2->t == Type::IntLiteral){    
-                            tmp.type = Type::Int;
-                            auto subi_inst = new Instruction({op1, op2, tmp, Operator::subi});
-                            buffer.push_back(subi_inst);  
-
-                        }else{  
+                        else
+                        {
                             type_transform(op1, op2, buffer);
                             tmp.type = op1.type;
-                            if (tmp.type == Type::Int){      
-                                buffer.push_back(new Instruction({op2, op1, tmp, Operator::sub}));  
-                            }else{
-                                buffer.push_back(new Instruction({op2, op1, tmp, Operator::fsub}));  
+                            if (tmp.type == Type::Int)
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::sub}));
+                            }
+                            else
+                            {
+                                buffer.push_back(new Instruction({op1, op2, tmp, Operator::fsub}));
                             }
                         }
                     }
                 }
-                root->v = tmp.name;     
-                root->t = tmp.type;     
+                else
+                {
+                    if (tk == TokenType::PLUS)
+                    {
+                        if (root->t == Type::Int && mulexp2->t == Type::IntLiteral)
+                        {
+                            tmp.type = Type::Int;
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::addi}));
+                        }
+                        else if (root->t == Type::IntLiteral && mulexp2->t == Type::Int)
+                        {
+                            tmp.type = Type::Int;
+                            buffer.push_back(new Instruction({op2, op1, tmp, Operator::addi}));
+                        }
+                        else
+                        {
+                            tmp.type = Type::Float;
+                            type_transform(op1, op2, buffer);
+                            buffer.push_back(new Instruction({op1, op2, tmp, Operator::fadd}));
+                        }
+                    }
+                    else
+                    {
+                        if (root->t == Type::Int && mulexp2->t == Type::IntLiteral)
+                        {
+                            tmp.type = Type::Int;
+                            auto subi_inst = new Instruction({op1, op2, tmp, Operator::subi});
+                            buffer.push_back(subi_inst);
+                        }
+                        else
+                        {
+                            type_transform(op1, op2, buffer);
+                            tmp.type = op1.type;
+                            if (tmp.type == Type::Int)
+                            {
+                                buffer.push_back(new Instruction({op2, op1, tmp, Operator::sub}));
+                            }
+                            else
+                            {
+                                buffer.push_back(new Instruction({op2, op1, tmp, Operator::fsub}));
+                            }
+                        }
+                    }
+                }
+                root->v = tmp.name;
+                root->t = tmp.type;
             }
 
             i += 2;
@@ -1130,13 +1529,17 @@ void frontend::Analyzer::analysisAddExp(AddExp* root, vector<ir::Instruction*>& 
     }
 }
 
-void frontend::Analyzer::analysisRelExp(RelExp* root,vector<ir::Instruction*>& buffer){
-    if ((int)root->children.size() == 1){    
-    
+void frontend::Analyzer::analysisRelExp(RelExp *root, vector<ir::Instruction *> &buffer)
+{
+
+    if ((int)root->children.size() == 1)
+    {
+
         ANALYSIS(addexp, AddExp, 0);
         COPY_EXP_NODE(addexp, root);
-
-    }else{      
+    }
+    else
+    {
 
         ANALYSIS(addexp1, AddExp, 0);
         root->is_computable = addexp1->is_computable;
@@ -1144,44 +1547,61 @@ void frontend::Analyzer::analysisRelExp(RelExp* root,vector<ir::Instruction*>& b
         root->v = addexp1->v;
 
         int i = 1;
-        while (i < (int)root->children.size()){
+        while (i < (int)root->children.size())
+        {
 
-            ANALYSIS(addexp2, AddExp, i+1);     
-            auto tk = dynamic_cast<Term*>(root->children[i])->token.type;   
+            ANALYSIS(addexp2, AddExp, i + 1);
+            auto tk = dynamic_cast<Term *>(root->children[i])->token.type;
 
-            root->is_computable = false;     
+            root->is_computable = false;
             Operand op1 = Operand(root->v, root->t);
             Operand op2 = Operand(addexp2->v, addexp2->t);
-            type_transform(op1, op2, buffer);   
-            Operand des = Operand("t" + std::to_string(tmp_cnt++), Type::Int);  
-            if (tk == TokenType::LSS){
-                if (op1.type == Type::Int){
+            type_transform(op1, op2, buffer);
+            Operand des = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
+            if (tk == TokenType::LSS)
+            {
+                if (op1.type == Type::Int)
+                {
                     buffer.push_back(new Instruction({op1, op2, des, Operator::lss}));
-                }else{
+                }
+                else
+                {
                     des.type = Type::Float;
                     buffer.push_back(new Instruction({op1, op2, des, Operator::flss}));
                 }
             }
-            else if (tk == TokenType::GTR){
-                if (op1.type == Type::Int){
+            else if (tk == TokenType::GTR)
+            {
+                if (op1.type == Type::Int)
+                {
                     buffer.push_back(new Instruction({op1, op2, des, Operator::gtr}));
-                }else{
+                }
+                else
+                {
                     des.type = Type::Float;
                     buffer.push_back(new Instruction({op1, op2, des, Operator::fgtr}));
                 }
             }
-            else if (tk == TokenType::LEQ){
-                if (op1.type == Type::Int){
+            else if (tk == TokenType::LEQ)
+            {
+                if (op1.type == Type::Int)
+                {
                     buffer.push_back(new Instruction({op1, op2, des, Operator::leq}));
-                }else{
+                }
+                else
+                {
                     des.type = Type::Float;
                     buffer.push_back(new Instruction({op1, op2, des, Operator::fleq}));
                 }
             }
-            else{
-                if (op1.type == Type::Int){
+            else
+            {
+                if (op1.type == Type::Int)
+                {
                     buffer.push_back(new Instruction({op1, op2, des, Operator::geq}));
-                }else{
+                }
+                else
+                {
                     des.type = Type::Float;
                     buffer.push_back(new Instruction({op1, op2, des, Operator::fgeq}));
                 }
@@ -1195,40 +1615,53 @@ void frontend::Analyzer::analysisRelExp(RelExp* root,vector<ir::Instruction*>& b
     }
 }
 
-void frontend::Analyzer::analysisEqExp(EqExp* root,vector<ir::Instruction*>& buffer){
-    if ((int)root->children.size() == 1){    
+void frontend::Analyzer::analysisEqExp(EqExp *root, vector<ir::Instruction *> &buffer)
+{
+    if ((int)root->children.size() == 1)
+    {
 
-        ANALYSIS(relexp, RelExp, 0);     
+        ANALYSIS(relexp, RelExp, 0);
         COPY_EXP_NODE(relexp, root);
+    }
+    else
+    {
 
-    }else{      
-
-        ANALYSIS(relexp1, RelExp, 0);     
+        ANALYSIS(relexp1, RelExp, 0);
         root->is_computable = relexp1->is_computable;
         root->v = relexp1->v;
         root->t = relexp1->t;
 
         int i = 1;
-        while (i < (int)root->children.size()){
-            ANALYSIS(relexp2, RelExp, i+1);     
-            auto tk = dynamic_cast<Term*>(root->children[i])->token.type;   
-            
+        while (i < (int)root->children.size())
+        {
+            ANALYSIS(relexp2, RelExp, i + 1);
+            auto tk = dynamic_cast<Term *>(root->children[i])->token.type;
+
             root->is_computable = false;
             Operand op1 = Operand(root->v, root->t);
             Operand op2 = Operand(relexp2->v, relexp2->t);
             type_transform(op1, op2, buffer);
-            Operand des = Operand("t" + std::to_string(tmp_cnt++), Type::Int);  
-            if (tk == TokenType::EQL){  
-                if (op1.type == Type::Int){
+            Operand des = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
+            if (tk == TokenType::EQL)
+            {
+                if (op1.type == Type::Int)
+                {
                     buffer.push_back(new Instruction({op1, op2, des, Operator::eq}));
-                }else{
+                }
+                else
+                {
                     des.type = Type::Float;
                     buffer.push_back(new Instruction({op1, op2, des, Operator::feq}));
                 }
-            }else{      
-                if (op1.type == Type::Int){
+            }
+            else
+            {
+                if (op1.type == Type::Int)
+                {
                     buffer.push_back(new Instruction({op1, op2, des, Operator::neq}));
-                }else{
+                }
+                else
+                {
                     des.type = Type::Float;
                     buffer.push_back(new Instruction({op1, op2, des, Operator::fneq}));
                 }
@@ -1236,41 +1669,42 @@ void frontend::Analyzer::analysisEqExp(EqExp* root,vector<ir::Instruction*>& buf
 
             root->v = des.name;
             root->t = Type::Int;
-            
 
             i += 2;
         }
     }
 }
 
-void frontend::Analyzer::analysisLAndExp(LAndExp* root, vector<ir::Instruction*>& buffer){
-    if ((int)root->children.size() == 1){    
+void frontend::Analyzer::analysisLAndExp(LAndExp *root, vector<ir::Instruction *> &buffer)
+{
+    if ((int)root->children.size() == 1)
+    {
 
-        ANALYSIS(eqexp, EqExp, 0);     
+        ANALYSIS(eqexp, EqExp, 0);
         COPY_EXP_NODE(eqexp, root);
+    }
+    else
+    {
 
-    }else{      
-        
-        
-        ANALYSIS(eqexp, EqExp, 0);  
-        
-        auto tmp = vector<ir::Instruction*>();  
-        auto andexp = dynamic_cast<LAndExp*>(root->children[2]);  
+        ANALYSIS(eqexp, EqExp, 0);
+
+        auto tmp = vector<ir::Instruction *>();
+        auto andexp = dynamic_cast<LAndExp *>(root->children[2]);
         assert(andexp);
-        analysisLAndExp(andexp, tmp);    
-        
-        root->t = Type::Int;    
+        analysisLAndExp(andexp, tmp);
+
+        root->t = Type::Int;
 
         Operand op1 = Operand(eqexp->v, eqexp->t);
         Operand op2 = Operand(andexp->v, andexp->t);
-        Operand des = Operand("t" + std::to_string(tmp_cnt++), Type::Int);    
-        Operand t1 = Operand("t" + std::to_string(tmp_cnt++), op1.type);    
-        
-        buffer.push_back(new Instruction({op1, {}, t1, Operator::mov}));    
-        buffer.push_back(new Instruction({t1, {}, {"2", Type::IntLiteral}, Operator::_goto}));  
-        buffer.push_back(new Instruction({{}, {}, {std::to_string(tmp.size()+3), Type::IntLiteral}, Operator::_goto}));
-        buffer.insert(buffer.end(), tmp.begin(), tmp.end());    
-        buffer.push_back(new Instruction({op2, {}, des, Operator::mov}));   
+        Operand des = Operand("t" + std::to_string(tmp_cnt++), Type::Int);
+        Operand t1 = Operand("t" + std::to_string(tmp_cnt++), op1.type);
+
+        buffer.push_back(new Instruction({op1, {}, t1, Operator::mov}));
+        buffer.push_back(new Instruction({t1, {}, {"2", Type::IntLiteral}, Operator::_goto}));
+        buffer.push_back(new Instruction({{}, {}, {std::to_string(tmp.size() + 3), Type::IntLiteral}, Operator::_goto}));
+        buffer.insert(buffer.end(), tmp.begin(), tmp.end());
+        buffer.push_back(new Instruction({op2, {}, des, Operator::mov}));
         buffer.push_back(new Instruction({{}, {}, {"2", Type::IntLiteral}, Operator::_goto}));
         buffer.push_back(new Instruction({"0", Type::IntLiteral}, {}, des, Operator::mov));
 
@@ -1278,32 +1712,35 @@ void frontend::Analyzer::analysisLAndExp(LAndExp* root, vector<ir::Instruction*>
     }
 }
 
-void frontend::Analyzer::analysisLOrExp(LOrExp* root, vector<ir::Instruction*>& buffer){
-    if ((int)root->children.size() == 1){    
+void frontend::Analyzer::analysisLOrExp(LOrExp *root, vector<ir::Instruction *> &buffer)
+{
+    if ((int)root->children.size() == 1)
+    {
 
         ANALYSIS(landexp, LAndExp, 0);
         COPY_EXP_NODE(landexp, root);
-        
-    }else{      
-        
-        root->t = Type::Int;    
+    }
+    else
+    {
 
-        ANALYSIS(andexp, LAndExp, 0);     
+        root->t = Type::Int;
 
-        auto tmp = vector<ir::Instruction*>();  
-        auto orexp = dynamic_cast<LOrExp*>(root->children[2]);  
+        ANALYSIS(andexp, LAndExp, 0);
+
+        auto tmp = vector<ir::Instruction *>();
+        auto orexp = dynamic_cast<LOrExp *>(root->children[2]);
         assert(orexp);
-        analysisLOrExp(orexp, tmp);    
+        analysisLOrExp(orexp, tmp);
 
         Operand op1 = Operand(andexp->v, andexp->t);
         Operand op2 = Operand(orexp->v, orexp->t);
-        Operand t1 = Operand("t" + std::to_string(tmp_cnt++), root->t);    
-        Operand des = Operand("t" + std::to_string(tmp_cnt++), root->t);    
-        
-        buffer.push_back(new Instruction({op1, {}, t1, Operator::mov}));    
-        buffer.push_back(new Instruction({t1, {}, {std::to_string(tmp.size()+3), Type::IntLiteral}, Operator::_goto}));    
-        buffer.insert(buffer.end(), tmp.begin(), tmp.end());    
-        buffer.push_back(new Instruction({op2, {}, des, Operator::mov}));   
+        Operand t1 = Operand("t" + std::to_string(tmp_cnt++), root->t);
+        Operand des = Operand("t" + std::to_string(tmp_cnt++), root->t);
+
+        buffer.push_back(new Instruction({op1, {}, t1, Operator::mov}));
+        buffer.push_back(new Instruction({t1, {}, {std::to_string(tmp.size() + 3), Type::IntLiteral}, Operator::_goto}));
+        buffer.insert(buffer.end(), tmp.begin(), tmp.end());
+        buffer.push_back(new Instruction({op2, {}, des, Operator::mov}));
         buffer.push_back(new Instruction({{}, {}, {"2", Type::IntLiteral}, Operator::_goto}));
         buffer.push_back(new Instruction({"1", Type::IntLiteral}, {}, des, Operator::mov));
 
@@ -1311,8 +1748,9 @@ void frontend::Analyzer::analysisLOrExp(LOrExp* root, vector<ir::Instruction*>& 
     }
 }
 
-void frontend::Analyzer::analysisConstExp(ConstExp* root, vector<ir::Instruction*>& buffer){
-    ANALYSIS(addexp, AddExp, 0);    
+void frontend::Analyzer::analysisConstExp(ConstExp *root, vector<ir::Instruction *> &buffer)
+{
+    ANALYSIS(addexp, AddExp, 0);
     root->v = addexp->v;
     root->t = addexp->t;
 }
