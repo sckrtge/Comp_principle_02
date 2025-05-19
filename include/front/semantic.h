@@ -47,7 +47,7 @@ map<std::string,ir::Function*>* get_lib_funcs();
 struct SymbolTable{
     vector<ScopeInfo> scope_stack;
     map<std::string,ir::Function*> functions;
-    int scope_cnt;
+    int scope_cnt = 0;
 
     /**
      * @brief enter a new scope, record the infomation in scope stacks
@@ -96,7 +96,7 @@ struct Analyzer {
     int tmp_cnt;
     vector<ir::Instruction*> g_init_inst;
     SymbolTable symbol_table;
-
+    ir::Function* curr_function = nullptr;
     /**
      * @brief constructor
      */
@@ -108,7 +108,7 @@ struct Analyzer {
     // reject copy & assignment
     Analyzer(const Analyzer&) = delete;
     Analyzer& operator=(const Analyzer&) = delete;
-
+    void type_transform(ir::Operand& , ir::Operand& , vector<ir::Instruction*>& );
     void analysisCompUnit(CompUnit* , ir::Program&);
     void analysisFuncDef(FuncDef*, ir::Function&);
     void analysisDecl(Decl*, vector<ir::Instruction*>&);
