@@ -38,6 +38,8 @@ struct ScopeInfo {
     int cnt;
     string name;
     map_str_ste table;
+    ScopeInfo(int cnt, string name, map_str_ste table) : cnt(cnt),name(name), table(table) {}
+    ScopeInfo() {}
 };
 
 // surpport lib functions
@@ -96,6 +98,7 @@ struct Analyzer {
     int tmp_cnt;
     vector<ir::Instruction*> g_init_inst;
     SymbolTable symbol_table;
+    ir::Function * now_func = nullptr;
 
     /**
      * @brief constructor
@@ -109,6 +112,7 @@ struct Analyzer {
     Analyzer(const Analyzer&) = delete;
     Analyzer& operator=(const Analyzer&) = delete;
 
+    void type_transform(ir::Operand&, ir::Operand&, vector<ir::Instruction*>&);
     void analysisCompUnit(CompUnit* , ir::Program&);
     void analysisFuncDef(FuncDef*, ir::Function&);
     void analysisDecl(Decl*, vector<ir::Instruction*>&);
